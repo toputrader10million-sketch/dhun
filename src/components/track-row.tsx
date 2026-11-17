@@ -1,0 +1,191 @@
+'use client'
+import Image from 'next/image'
+import { memo } from 'react'
+import { Heart, ListPlus, Play, Plus, Radio, Trash2, MoreVertical, ListMusic } from 'lucide-react'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { formatDuration, formatViews } from '@/lib/format'
+import type { MusicItem } from '@/lib/types'
+import { usePlayer } from '@/store/player'
+import { useLibrary } from '@/store/library'
+import { cn } from '@/lib/utils'
+
+export function TrackImage({
+  item,
+  className,
+  rounded = 'rounded-lg',
+}: {
+  item: Pick<MusicItem, 'artwork' | 'title'>
+  className?: string
+  rounded?: string
+}) {
+  return (
+    <div className={cn('relative overflow-hidden bg-muted shrink-0', rounded, className)}>
+      {item.artwork ? (
+        // Piped thumbnails are cross-origin; plain img avoids next/image domain config
+        <img src={item.artwork} alt={item.title} loading="lazy" className="h-full w-full object-cover" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+          <ListMusic className="h-5 w-5" />
+        </div>
+      )}
+    </div>
+  )
+}
+
+interface TrackRowProps {
+  item: MusicItem
+  context?: MusicItem[]
+  index?: number
+  onRemove?: () => void
+  trailing?: React.ReactNode
+  showViews?: boolean
+}
+
+export const TrackRow = memo(function TrackRow({
+  item,
+  context,
+  index,
+  onRemove,
+  trailing,
+  showViews,
+}: TrackRowProps) {
+  const playItem = usePlayer((s) => s.playItem)
+  const addToQueue = usePlayer((s) => s.addToQueue)
+  const playNext = usePlayer((s) => s.playNext)
+  const startRadio = usePlayer((s) => s.startRadio)
+  const currentId = usePlayer((s) => (s.queue[s.index]?.id ?? null))
+  const isPlaying = usePlayer((s) => s.isPlaying)
+  const isCurrent = currentId === item.id
+  const { isFavorite, toggleFavorite, playlists, addToPlaylist, createPlaylist } = useLibrary()
+
+  const fav = isFavorite(item.id)
+
+  return (
+    <div
+      className={cn(
+        'group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-accent/60 cursor-pointer select-none',
+        isCurrent && 'bg-accent'
+      )}
+      onClick={() => playItem(item, context)}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          playItem(item, context)
+        }
+      }}
+      aria-label={`Play ${item.title}`}
+    >
+      <span className="relative hidden sm:flex w-5 justify-center text-xs text-muted-foreground tabular-nums shrink-0">
+        {isCurrent && isPlaying ? (
+          <span className="flex items-end gap-0.5 h-3.5" aria-hidden>
+            <span className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse" style={{ height: '60%' }} />
+            <span
+              className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse"
+              style={{ height: '100%', animationDelay: '0.15s' }}
+            />
+            <span
+              className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse"
+              style={{ height: '45%', animationDelay: '0.3s' }}
+            />
+          </span>
+        ) : (
+          <>
+            <span className="group-hover:hidden">{index !== undefined ? index + 1 : ''}</span>
+            <Play className="hidden group-hover:block h-3.5 w-3.5 fill-current" />
+          </>
+        )}
+      </span>
+
+      <TrackImage item={item} className="h-11 w-11" rounded="rounded-md" />
+
+      <div className="min-w-0 flex-1">
+        <p className={cn('truncate text-sm font-medium', isCurrent && 'text-primary')}>
+          {item.title}
+        </p>
+        <p className="truncate text-xs text-muted-foreground">
+          {item.artist}
+          {showViews && item.views ? ` • ${formatViews(item.views)}` : ''}
+        </p>
+      </div>
+
+      {trailing}
+
+      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+        {formatDuration(item.duration)}
+      </span>
+
+      <div className="shrink-0" onClick={(e) => e.stopPropagation()}>
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              className="rounded-full p-1.5 text-muted-foreground hover:text-foreground hover:bg-accent focus:outline-none"
+              aria-label={`More options for ${item.title}`}
+            >
+              <MoreVertical className="h-4 w-4" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-52">
+            <DropdownMenuItem onClick={() => playNext(item)}>
+              <ListPlus className="mr-2 h-4 w-4" /> Play next
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => addToQueue(item)}>
+              <Plus className="mr-2 h-4 w-4" /> Add to queue
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => startRadio()}>
+              <Radio className="mr-2 h-4 w-4" /> Start radio
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={() => toggleFavorite(item)}>
+              <Heart className={cn('mr-2 h-4 w-4', fav && 'fill-current text-primary')} />
+              {fav ? 'Remove favorite' : 'Save to favorites'}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <ListMusic className="mr-2 h-4 w-4" /> Add to playlist
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="max-h-64 overflow-y-auto dhun-scroll">
+                {playlists.length === 0 ? (
+                  <DropdownMenuItem disabled>No playlists yet</DropdownMenuItem>
+                ) : (
+                  playlists.map((p) => (
+                    <DropdownMenuItem key={p.id} onClick={() => addToPlaylist(p.id, p.name, item)}>
+                      {p.name}
+                    </DropdownMenuItem>
+                  ))
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async () => {
+                    const id = await createPlaylist(`New ${new Date().toLocaleDateString()}`)
+                    if (id) addToPlaylist(id, 'Playlist', item)
+                  }}
+                >
+                  <Plus className="mr-2 h-4 w-4" /> New playlist…
+                </DropdownMenuItem>
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {onRemove && (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={onRemove} className="text-destructive focus:text-destructive">
+                  <Trash2 className="mr-2 h-4 w-4" /> Remove
+                </DropdownMenuItem>
+              </>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    </div>
+  )
+})
