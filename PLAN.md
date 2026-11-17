@@ -113,6 +113,11 @@ GET/POST/DELETE /api/history              → HistoryEntry[] (max 200, dedupe by
 | 6 | Integration + db push + lint + dev.log | Main |
 | 7 | Agent Browser E2E ভেরিফিকেশন + ফিক্স | Main |
 | 8 | ফাইনাল সামারি | Main |
+| **v1.1-a** | Turso (libSQL adapter) + multi-user sync schema/API | ✅ Subagent 2-a |
+| **v1.1-b** | Audius routes + /api/audio proxy + SW v4 audio cache + offline lib + Cast lib | ✅ Subagents 2-a/2-b |
+| **v1.1-c** | UI wiring (source toggle, Offline tab, Cloud Sync card, cast/download buttons) | ✅ Main |
+| **v1.1-d** | Vercel deploy prep (.env.example, README, prisma generate in build) | ✅ Main |
+| **v1.1-e** | E2E: Audius playback+UI sync, offline download→offline play, sync card, responsive, footer | ✅ Main (SW v4 network-first dev fix + hifi timeupdate/hifiActive race fix) |
 
 ---
 

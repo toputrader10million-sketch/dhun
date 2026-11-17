@@ -19,6 +19,8 @@ export const useInstall = create<InstallState>((set) => ({
 /** Registers the service worker and captures the PWA install prompt. */
 export default function RegisterSW() {
   useEffect(() => {
+    // The SW serves dev hosts network-first (IS_DEV_HOST check in sw.js), so
+    // registering in dev is safe — needed for offline-audio testing.
     if ('serviceWorker' in navigator) {
       const register = () => {
         navigator.serviceWorker.register('/sw.js').catch(() => {})

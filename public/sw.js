@@ -22,11 +22,18 @@
  *  { type: 'OFFLINE_DELETED', url }
  *  { type: 'OFFLINE_CLEARED' }
  */
-const VERSION = 'dhun-v3'
+const VERSION = 'dhun-v4'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const API_CACHE = `${VERSION}-api`
 const AUDIO_CACHE = `${VERSION}-audio` // starts with VERSION → survives activate cleanup
+
+// Dev servers serve non-hashed, frequently-changing bundles under stable URLs.
+// Static assets must be network-first there or the app would run stale code.
+const IS_DEV_HOST =
+  self.location.hostname === 'localhost' ||
+  self.location.hostname === '127.0.0.1' ||
+  self.location.hostname.endsWith('.localhost')
 
 const PRECACHE_URLS = [
   '/manifest.webmanifest',
@@ -261,6 +268,11 @@ self.addEventListener('fetch', (event) => {
     return
   }
   if (url.pathname.startsWith('/_next/static/') || url.pathname.startsWith('/icons/')) {
+    if (IS_DEV_HOST) {
+      // Dev: stable chunk URLs change content — network-first, cache only as offline fallback.
+      event.respondWith(networkFirst(request, STATIC_CACHE).catch(() => caches.match(request)))
+      return
+    }
     event.respondWith(cacheFirst(request, STATIC_CACHE))
     return
   }

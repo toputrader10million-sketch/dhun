@@ -73,10 +73,14 @@ class HifiEngine {
       const a = new Audio()
       a.preload = 'auto'
       a.crossOrigin = 'anonymous'
+      if (typeof window !== 'undefined') (window as unknown as { __dhunEngineAudio?: HTMLAudioElement }).__dhunEngineAudio = a
       a.addEventListener('ended', () => this.events.onState?.('ended'))
       a.addEventListener('playing', () => this.events.onState?.('playing'))
       a.addEventListener('pause', () => this.events.onState?.('paused'))
       a.addEventListener('waiting', () => this.events.onState?.('buffering'))
+      a.addEventListener('timeupdate', () => {
+        if (Number.isFinite(a.duration)) this.events.onTime?.(a.currentTime, a.duration || 0)
+      })
       a.addEventListener('error', () => {
         this.active = false
         this.events.onError?.('audio-error')

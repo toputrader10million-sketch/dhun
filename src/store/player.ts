@@ -129,25 +129,30 @@ export const usePlayer = create<PlayerState>()(
         if (offline.isDownloaded(item.id)) {
           const url = offline.urlFor(item.id)
           if (url) {
+            // Mark active BEFORE play(): 'playing' can fire before the await resolves
+            set({ hifiActive: true })
             const ok = await hifiEngine.playUrl(url, startSeconds)
             if (ok) {
-              set({ hifiActive: true, isBuffering: false, loadingTrackId: null })
+              set({ isBuffering: false, loadingTrackId: null })
               sideEffects(item)
               return
             }
+            set({ hifiActive: false })
           }
         }
 
         // 2) Audius tracks stream via our same-origin proxy (EQ-capable)
         if (item.source === 'au') {
+          set({ hifiActive: true })
           const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds)
           if (ok) {
-            set({ hifiActive: true, isBuffering: false, loadingTrackId: null })
+            set({ isBuffering: false, loadingTrackId: null })
             sideEffects(item)
             return
           }
+          set({ hifiActive: false })
           stopLocalEngines()
-          set({ hifiActive: false, isBuffering: false, loadingTrackId: null, isPlaying: false })
+          set({ isBuffering: false, loadingTrackId: null, isPlaying: false })
           setMediaPlaybackState('paused')
           toast.error('Audius stream unavailable', { description: item.title.slice(0, 48) })
           return
@@ -156,6 +161,7 @@ export const usePlayer = create<PlayerState>()(
         // 3) YouTube — Hi-Fi mode: same-origin proxy first, then direct stream
         let hifiOk = false
         if (mode === 'hifi') {
+          set({ hifiActive: true })
           hifiOk = await hifiEngine.playUrl(`/api/audio/${item.id}`, startSeconds)
           if (!hifiOk) {
             hifiOk = await hifiEngine.play(item.id, {
@@ -167,10 +173,12 @@ export const usePlayer = create<PlayerState>()(
               })
             }
           }
+          if (!hifiOk) set({ hifiActive: false })
         }
 
         if (!hifiOk) {
           hifiEngine.active = false
+          hifiEngine.stop() // stop any still-playing direct audio before the iframe takes over
           await youtubeEngine.play(item.id, startSeconds)
           const vol = useSettings.getState().volume
           youtubeEngine.setVolume(vol)
