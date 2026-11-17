@@ -139,6 +139,17 @@ function toDuration(v: unknown): number {
   return 0
 }
 
+const YT_VIDEO_ID_RE = /^[\w-]{11}$/
+
+/**
+ * Direct YouTube CDN thumbnail — never goes through an instance's image proxy
+ * (those proxies are rate-limited/dead, which broke artwork across the app).
+ * hqdefault.jpg always exists for a valid video id.
+ */
+function ytThumbUrl(id: string): string | null {
+  return YT_VIDEO_ID_RE.test(id) ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : null
+}
+
 /** Map any Piped item (stream/playlist/channel) to a MusicItem, gracefully. */
 export function parseStreamItem(it: Record<string, unknown>): MusicItem {
   const title = typeof it.title === 'string' ? it.title : typeof it.name === 'string' ? it.name : 'Unknown'
@@ -146,14 +157,16 @@ export function parseStreamItem(it: Record<string, unknown>): MusicItem {
     (typeof it.uploaderName === 'string' && it.uploaderName) ||
     (typeof it.uploader === 'string' && it.uploader) ||
     'Unknown artist'
-  const artwork =
+  const rawArtwork =
     (typeof it.thumbnail === 'string' && it.thumbnail) ||
     (typeof it.thumbnailUrl === 'string' && it.thumbnailUrl) ||
     ''
   const views = typeof it.views === 'number' ? it.views : undefined
   const durRaw = it.duration
+  const id = extractId(it)
+  const artwork = ytThumbUrl(id) ?? rawArtwork
   return {
-    id: extractId(it),
+    id,
     title,
     artist,
     artwork,

@@ -15,6 +15,7 @@ import { useSettings } from './settings'
 import { useOffline } from './offline'
 import { audioUrlFor } from '@/lib/offline'
 import { useCast } from '@/lib/cast'
+import type { AudioStream } from '@/lib/types'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -28,6 +29,7 @@ interface PlayerState {
   shuffle: boolean
   repeat: RepeatMode
   hifiActive: boolean
+  embedMode: boolean // visible YouTube embed player is driving playback
   hiResArt: string | null
   loadingTrackId: string | null
   // actions
@@ -74,6 +76,32 @@ function resolveAudioUrl(item: MusicItem): string | null {
   if (item.source === 'au') return `/api/audius/stream/${item.id}`
   if (useSettings.getState().playbackMode === 'hifi') return `/api/audio/${item.id}`
   return null
+}
+
+/** Best-quality stream from our cached /api/streams resolver (server-side). */
+async function resolveBestStream(
+  id: string,
+  maxBitrate: number
+): Promise<AudioStream | null> {
+  try {
+    const res = await fetch(`/api/streams/${encodeURIComponent(id)}`, {
+      signal: AbortSignal.timeout(9000),
+    })
+    if (!res.ok) return null
+    const data = (await res.json()) as { audioStreams?: AudioStream[] }
+    const streams = (data.audioStreams ?? []).filter((s) => s.url && s.bitrate > 0)
+    if (streams.length === 0) return null
+    const sorted = [...streams].sort((a, b) => b.bitrate - a.bitrate)
+    const isM4a = (s: AudioStream) => /mp4a|m4a|audio\/mp4/i.test(s.mimeType || '')
+    if (maxBitrate > 0) {
+      const pool = sorted.filter((s) => s.bitrate <= maxBitrate * 1000)
+      const usable = pool.length > 0 ? pool : sorted
+      return usable.find(isM4a) ?? usable[0]
+    }
+    return sorted.find((s) => isM4a(s) && s.bitrate >= 120_000) ?? sorted[0]
+  } catch {
+    return null
+  }
 }
 
 function shuffleIndices(len: number, first: number): number[] {
@@ -144,7 +172,13 @@ export const usePlayer = create<PlayerState>()(
 
       async function startPlayback(item: MusicItem, startSeconds = 0) {
         const mode = useSettings.getState().playbackMode
-        set({ loadingTrackId: item.id, isBuffering: true, hiResArt: null, position: startSeconds })
+        set({
+          loadingTrackId: item.id,
+          isBuffering: true,
+          hiResArt: null,
+          position: startSeconds,
+          embedMode: false,
+        })
         updateMediaMetadata(item)
         setMediaPlaybackState('paused')
 
@@ -175,7 +209,7 @@ export const usePlayer = create<PlayerState>()(
             set({ hifiActive: true })
             const ok = await hifiEngine.playUrl(url, startSeconds)
             if (ok) {
-              set({ isBuffering: false, loadingTrackId: null })
+              set({ isBuffering: false, loadingTrackId: null, embedMode: false })
               schedulePreload()
               sideEffects(item)
               return
@@ -187,9 +221,11 @@ export const usePlayer = create<PlayerState>()(
         // 2) Audius tracks stream via our same-origin proxy (EQ-capable)
         if (item.source === 'au') {
           set({ hifiActive: true })
-          const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds)
+          const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds, {
+            watchdogMs: 10000,
+          })
           if (ok) {
-            set({ isBuffering: false, loadingTrackId: null })
+            set({ isBuffering: false, loadingTrackId: null, embedMode: false })
             schedulePreload()
             sideEffects(item)
             return
@@ -202,30 +238,36 @@ export const usePlayer = create<PlayerState>()(
           return
         }
 
-        // 3) YouTube — Hi-Fi mode: same-origin proxy first, then direct stream
+        // 3) YouTube — Hi-Fi mode: resolve once via our cached resolver, play the
+        //    direct stream in the browser (no serverless streaming limits).
+        //    A watchdog keeps a stalled stream from hanging "Buffering…" forever.
         let hifiOk = false
         if (mode === 'hifi') {
-          set({ hifiActive: true })
-          hifiOk = await hifiEngine.playUrl(`/api/audio/${item.id}`, startSeconds)
-          if (!hifiOk) {
-            hifiOk = await hifiEngine.play(item.id, {
-              maxBitrate: useSettings.getState().maxBitrate,
-            })
-            if (!hifiOk) {
-              toast.info('Direct stream unavailable — using stable mode', {
-                description: 'Switch to Hi-Fi mode later in Settings if instances recover.',
-              })
-            }
+          const best = await resolveBestStream(item.id, useSettings.getState().maxBitrate)
+          if (best?.url) {
+            set({ hifiActive: true })
+            hifiOk = await hifiEngine.playUrl(best.url, startSeconds, { watchdogMs: 8000 })
           }
-          if (!hifiOk) set({ hifiActive: false })
+          if (!hifiOk) {
+            set({ hifiActive: false })
+            toast.info('Direct stream unavailable — using YouTube player', {
+              description: 'Hi-Fi streams are limited right now; playback continues in stable mode.',
+            })
+          }
         }
 
+        // 4) Stable fallback: YouTube's official embed player — visible video
+        //    bubble. Hidden/zero-size embeds trigger YouTube's bot check, so the
+        //    player stays genuinely visible while it drives playback.
         if (!hifiOk) {
           hifiEngine.active = false
           hifiEngine.stop() // stop any still-playing direct audio before the iframe takes over
+          set({ embedMode: true })
           await youtubeEngine.play(item.id, startSeconds)
           const vol = useSettings.getState().volume
           youtubeEngine.setVolume(vol)
+        } else {
+          set({ embedMode: false })
         }
 
         set({ hifiActive: hifiOk, isBuffering: false, loadingTrackId: null })
@@ -276,6 +318,7 @@ export const usePlayer = create<PlayerState>()(
         shuffle: false,
         repeat: 'off',
         hifiActive: false,
+        embedMode: false,
         hiResArt: null,
         loadingTrackId: null,
 
@@ -356,11 +399,12 @@ export const usePlayer = create<PlayerState>()(
             },
             onError: () => {
               if (!get().hifiActive) return
-              toast.error('Stream failed — falling back to stable mode')
+              toast.error('Stream failed — falling back to YouTube player')
               set({ hifiActive: false })
               const cur = current()
               if (cur) {
                 const pos = get().position
+                set({ embedMode: true })
                 youtubeEngine.play(cur.id, pos)
                 youtubeEngine.setVolume(useSettings.getState().volume)
               }
@@ -447,7 +491,15 @@ export const usePlayer = create<PlayerState>()(
           if (useCast.getState().connected) useCast.getState().actions.stopCast()
           youtubeEngine.stop()
           hifiEngine.stop()
-          set({ queue: [], index: -1, isPlaying: false, position: 0, duration: 0, hiResArt: null })
+          set({
+            queue: [],
+            index: -1,
+            isPlaying: false,
+            position: 0,
+            duration: 0,
+            hiResArt: null,
+            embedMode: false,
+          })
         },
 
         castCurrent: async () => {

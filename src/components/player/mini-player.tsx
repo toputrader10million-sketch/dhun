@@ -1,6 +1,7 @@
 'use client'
-import { Pause, Play, SkipBack, SkipForward, Heart, ChevronUp, X, ListMusic, Cast, Download, Loader2 } from 'lucide-react'
+import { Pause, Play, SkipBack, SkipForward, Heart, ListMusic, Cast, Download, Loader2 } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
+import { TrackImage } from '@/components/track-row'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
@@ -58,16 +59,7 @@ export function MiniPlayer() {
           aria-label="Open now playing"
         >
           {showMiniArt && (
-            <div className="relative h-10 w-10 shrink-0 overflow-hidden rounded-md bg-muted">
-              <img
-                src={current.artwork}
-                alt={current.title}
-                className="h-full w-full object-cover"
-              />
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity">
-                <ChevronUp className="h-4 w-4 text-white" />
-              </div>
-            </div>
+            <TrackImage item={current} className="h-10 w-10" rounded="rounded-md" />
           )}
           <div className="min-w-0">
             <p className="truncate text-sm font-medium leading-tight">{current.title}</p>

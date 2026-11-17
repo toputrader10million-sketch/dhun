@@ -212,8 +212,9 @@ export function SettingsView() {
             <div>
               <Label htmlFor="mode-select">Audio engine</Label>
               <p className="text-xs text-muted-foreground">
-                Stable: YouTube&apos;s official embedded player (always works). Hi-Fi: direct stream with
-                equalizer — experimental, falls back automatically.
+                Stable: YouTube&apos;s official player — most reliable, shows a small visible video
+                bubble (required by YouTube). Hi-Fi: direct audio stream with equalizer — best
+                quality when available, falls back automatically.
               </p>
             </div>
             <Select value={s.playbackMode} onValueChange={(v: any) => s.setPlaybackMode(v)}>

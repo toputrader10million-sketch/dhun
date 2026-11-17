@@ -80,18 +80,20 @@ export class YouTubeEngine {
       await new Promise<void>((resolve) => {
         let host = document.getElementById(this.hostId)
         if (!host) {
-          // Fallback: create host ourselves (defensive)
+          // Fallback: create a VISIBLE host ourselves (defensive).
+          // Hidden/zero-size embeds trigger YouTube's bot check
+          // ("Sign in to confirm you're not a bot") — the iframe must be real.
           const wrap = document.createElement('div')
           wrap.style.cssText =
-            'position:fixed;right:6px;bottom:6px;width:80px;height:45px;opacity:0.01;pointer-events:none;z-index:-1;overflow:hidden'
+            'position:fixed;right:12px;bottom:76px;width:224px;height:126px;z-index:40;overflow:hidden;border-radius:12px'
           host = document.createElement('div')
           host.id = this.hostId
           wrap.appendChild(host)
           document.body.appendChild(wrap)
         }
         this.player = new window.YT.Player(this.hostId, {
-          height: '90',
-          width: '160',
+          height: '100%',
+          width: '100%',
           playerVars: {
             playsinline: 1,
             controls: 0,

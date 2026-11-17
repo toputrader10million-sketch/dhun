@@ -1,5 +1,12 @@
 // Shared YouTube audio-stream resolver — server-only.
 // Extracted from src/app/api/streams/[id]/route.ts so /api/audio/[id] can reuse it.
+//
+// 2025 reality: Piped instances frequently fail (YouTube blocks anonymous
+// server-side extraction from datacenter IPs). Strategy:
+//   - resolve ALL instances in PARALLEL (Promise.any) with a short timeout —
+//     worst-case wall time ≈ timeout, not timeout × instance-count
+//   - cache successful resolutions (stream URLs live ~6h, we keep 40 min)
+//   - pick the highest-quality compatible audio stream
 import type { AudioStream } from '@/lib/types'
 import { PIPED_INSTANCES } from '@/lib/piped'
 
@@ -24,58 +31,91 @@ export interface ResolvedStreams {
   instance: string
 }
 
-/** Try /streams/{id} on every instance, 6s timeout each, return first success. */
-export async function resolveStreams(id: string): Promise<ResolvedStreams> {
-  const errors: string[] = []
+// ---------- resolved-streams cache (global singleton survives HMR) ----------
+const globalForStreams = globalThis as unknown as {
+  __dhunStreamCache?: Map<string, { data: ResolvedStreams; expires: number }>
+}
+const streamCache: Map<string, { data: ResolvedStreams; expires: number }> =
+  globalForStreams.__dhunStreamCache ?? new Map()
+globalForStreams.__dhunStreamCache = streamCache
 
-  for (const base of PIPED_INSTANCES) {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), 6000)
-    try {
-      const res = await fetch(`${base}/streams/${encodeURIComponent(id)}`, {
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: { accept: 'application/json' },
-        cache: 'no-store',
-      })
-      if (!res.ok) {
-        errors.push(`${base} → HTTP ${res.status}`)
-        continue
-      }
-      const data = (await res.json()) as StreamsResponse
-      const audio: AudioStream[] = (data.audioStreams ?? [])
-        .filter((s) => typeof s.url === 'string' && s.url && typeof s.bitrate === 'number')
-        .map((s) => ({
-          url: s.url as string,
-          bitrate: s.bitrate as number,
-          mimeType: s.mimeType ?? 'audio/mp4',
-          quality: s.quality ?? `${Math.round((s.bitrate ?? 0) / 1000)} kbps`,
-          codec: s.codec,
-        }))
-        .sort((a, b) => b.bitrate - a.bitrate)
+const RESOLVE_TIMEOUT_MS = 4500
+const RESOLVE_TTL_MS = 40 * 60 * 1000 // stream URLs typically expire ~6h
 
-      if (audio.length === 0) {
-        errors.push(`${base} → no audio streams`)
-        continue
-      }
+// track the last healthy instance index (module-level, survives within a lambda)
+let preferredInstance = 0
 
-      return {
-        title: data.title ?? '',
-        duration: typeof data.duration === 'number' ? data.duration : 0,
-        audioStreams: audio,
-        instance: base,
-      }
-    } catch (err) {
-      errors.push(`${base} → ${err instanceof Error ? err.message : String(err)}`)
-    } finally {
-      clearTimeout(timer)
+async function tryInstance(base: string, id: string): Promise<ResolvedStreams> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), RESOLVE_TIMEOUT_MS)
+  try {
+    const res = await fetch(`${base}/streams/${encodeURIComponent(id)}`, {
+      signal: controller.signal,
+      redirect: 'follow',
+      headers: { accept: 'application/json' },
+      cache: 'no-store',
+    })
+    if (!res.ok) throw new Error(`${base} → HTTP ${res.status}`)
+    const data = (await res.json()) as StreamsResponse
+    const audio: AudioStream[] = (data.audioStreams ?? [])
+      .filter((s) => typeof s.url === 'string' && s.url && typeof s.bitrate === 'number')
+      .map((s) => ({
+        url: s.url as string,
+        bitrate: s.bitrate as number,
+        mimeType: s.mimeType ?? 'audio/mp4',
+        quality: s.quality ?? `${Math.round((s.bitrate ?? 0) / 1000)} kbps`,
+        codec: s.codec,
+      }))
+    if (audio.length === 0) throw new Error(`${base} → no audio streams`)
+    return {
+      title: data.title ?? '',
+      duration: typeof data.duration === 'number' ? data.duration : 0,
+      audioStreams: sortStreamsDesc(audio),
+      instance: base,
     }
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
+export async function resolveStreams(id: string, maxInstances = 3): Promise<ResolvedStreams> {
+  const cached = streamCache.get(id)
+  if (cached && cached.expires > Date.now()) return cached.data
+
+  // Rotate through instances starting from the last healthy one; race in parallel.
+  const start = PIPED_INSTANCES.indexOf(preferredInstance) >= 0 ? preferredInstance : 0
+  const order: string[] = []
+  for (let i = 0; i < Math.min(maxInstances, PIPED_INSTANCES.length); i++) {
+    order.push(PIPED_INSTANCES[(start + i) % PIPED_INSTANCES.length])
   }
 
+  const results = await Promise.allSettled(order.map((base) => tryInstance(base, id)))
+  const fulfilled = results.find((r) => r.status === 'fulfilled') as
+    | { status: 'fulfilled'; value: ResolvedStreams }
+    | undefined
+  if (fulfilled) {
+    const resolved = fulfilled.value
+    // remember which slot worked so the next resolve starts there
+    const idx = PIPED_INSTANCES.indexOf(resolved.instance)
+    if (idx >= 0) preferredInstance = idx
+    streamCache.set(id, { data: resolved, expires: Date.now() + RESOLVE_TTL_MS })
+    if (streamCache.size > 300) {
+      for (const [k, v] of streamCache) if (v.expires < Date.now()) streamCache.delete(k)
+    }
+    return resolved
+  }
+
+  const errors = results.map((r) =>
+    r.status === 'rejected' ? (r.reason instanceof Error ? r.reason.message : String(r.reason)) : 'skipped'
+  )
   throw new AggregateError(
     errors.map((e) => new Error(e)),
     `All Piped instances failed for /streams/${id}`
   )
+}
+
+function sortStreamsDesc(streams: AudioStream[]): AudioStream[] {
+  return [...streams].sort((a, b) => b.bitrate - a.bitrate)
 }
 
 function isM4a(mimeType: string): boolean {
@@ -83,33 +123,30 @@ function isM4a(mimeType: string): boolean {
 }
 
 /**
- * Pick the best audio-only stream.
+ * Pick the best audio-only stream for BROWSER playback.
  * - explicit maxBitrate (kbps, or bps when > 1000): highest stream at/below it
- * - otherwise prefer m4a/mp4a closest to ~144 kbps (128–160 sweet spot)
- * - fall back to the highest-bitrate stream of any codec (webm/opus plays fine)
+ * - otherwise prefer the highest-bitrate m4a/AAC (universally playable, best
+ *   quality ≥128 kbps); when only opus/webm exists, take the highest one
  */
 export function pickAudioStream(
   streams: AudioStream[],
   maxBitrate?: number | null
 ): AudioStream | null {
   if (streams.length === 0) return null
+  const sorted = sortStreamsDesc(streams)
 
   if (typeof maxBitrate === 'number' && Number.isFinite(maxBitrate) && maxBitrate > 0) {
     const cap = maxBitrate > 1000 ? maxBitrate : maxBitrate * 1000 // accept bps or kbps
-    const below = streams.filter((s) => s.bitrate <= cap)
-    return (below.length > 0 ? below : streams).reduce((best, s) =>
-      s.bitrate > best.bitrate ? s : best
-    )
+    const below = sorted.filter((s) => s.bitrate <= cap)
+    const pool = below.length > 0 ? below : sorted
+    const m4a = pool.filter((s) => isM4a(s.mimeType))
+    return m4a[0] ?? pool[0]
   }
 
-  const m4a = streams.filter((s) => isM4a(s.mimeType))
-  if (m4a.length > 0) {
-    // closest to 144 kbps
-    return m4a.reduce((best, s) =>
-      Math.abs(s.bitrate - 144_000) < Math.abs(best.bitrate - 144_000) ? s : best
-    )
-  }
-  return streams[0] // pre-sorted desc by bitrate
+  const m4a = sorted.filter((s) => isM4a(s.mimeType))
+  // AAC ≥128k is the sweet spot: full quality + plays everywhere (incl. Safari)
+  const bestM4a = m4a.find((s) => s.bitrate >= 120_000)
+  return bestM4a ?? m4a[0] ?? sorted[0]
 }
 
 /**

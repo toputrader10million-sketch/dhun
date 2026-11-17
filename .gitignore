@@ -61,3 +61,4 @@ server.log
 # local dev database
 /db/*.db
 /db/*.db-journal
+tool-results/

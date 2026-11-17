@@ -1,7 +1,6 @@
 'use client'
-import Image from 'next/image'
-import { memo } from 'react'
-import { Heart, ListPlus, Play, Plus, Radio, Trash2, MoreVertical, ListMusic, Download } from 'lucide-react'
+import { memo, useState } from 'react'
+import { Heart, ListPlus, ListMusic, Play, Plus, Radio, Trash2, MoreVertical, Download } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,20 +18,49 @@ import { useLibrary } from '@/store/library'
 import { useOffline } from '@/store/offline'
 import { cn } from '@/lib/utils'
 
+const YT_VIDEO_ID_RE = /^[\w-]{11}$/
+
+/**
+ * Artwork with a self-healing fallback chain:
+ *   stored URL → i.ytimg.com hqdefault → i.ytimg.com mqdefault → placeholder.
+ * Covers items persisted before artwork normalization (dead proxy URLs).
+ */
 export function TrackImage({
   item,
   className,
   rounded = 'rounded-lg',
 }: {
-  item: Pick<MusicItem, 'artwork' | 'title'>
+  item: Pick<MusicItem, 'artwork' | 'title' | 'id'>
   className?: string
   rounded?: string
 }) {
+  const [stage, setStage] = useState(() => (item.artwork ? 0 : 1))
+  const [prevKey, setPrevKey] = useState(`${item.id}|${item.artwork}`)
+  const nextKey = `${item.id}|${item.artwork}`
+  if (prevKey !== nextKey) {
+    setPrevKey(nextKey)
+    setStage(item.artwork ? 0 : 1)
+  }
+
+  const ytLike = YT_VIDEO_ID_RE.test(item.id)
+  const candidates: string[] = []
+  if (item.artwork) candidates.push(item.artwork)
+  if (ytLike) {
+    candidates.push(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`)
+    candidates.push(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`)
+  }
+  const src = stage < candidates.length ? candidates[stage] : null
+
   return (
     <div className={cn('relative overflow-hidden bg-muted shrink-0', rounded, className)}>
-      {item.artwork ? (
-        // Piped thumbnails are cross-origin; plain img avoids next/image domain config
-        <img src={item.artwork} alt={item.title} loading="lazy" className="h-full w-full object-cover" />
+      {src ? (
+        <img
+          src={src}
+          alt={item.title}
+          loading="lazy"
+          onError={() => setStage((s) => s + 1)}
+          className="h-full w-full object-cover"
+        />
       ) : (
         <div className="flex h-full w-full items-center justify-center text-muted-foreground">
           <ListMusic className="h-5 w-5" />

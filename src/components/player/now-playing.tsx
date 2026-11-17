@@ -168,6 +168,7 @@ export function NowPlaying() {
   const shuffle = usePlayer((s) => s.shuffle)
   const repeat = usePlayer((s) => s.repeat)
   const hifiActive = usePlayer((s) => s.hifiActive)
+  const embedMode = usePlayer((s) => s.embedMode)
   const hiResArt = usePlayer((s) => s.hiResArt)
   const togglePlay = usePlayer((s) => s.togglePlay)
   const next = usePlayer((s) => s.next)
@@ -195,13 +196,30 @@ export function NowPlaying() {
   const dlProgress = useOffline((s) => (current ? s.progress[current.id] : undefined))
   const download = useOffline((s) => s.download)
 
+  // Artwork fallback chain: hi-res → stored → YouTube CDN → placeholder
+  const [artStage, setArtStage] = useState(0)
+  const [prevArtKey, setPrevArtKey] = useState('')
+  const artKey = `${current?.id ?? ''}|${hiResArt ?? ''}`
+  if (prevArtKey !== artKey) {
+    setPrevArtKey(artKey)
+    setArtStage(0)
+  }
+
   if (!current) return null
 
   const casting = castConnected && castTrackId === current.id
   const shownPosition = casting ? castPosition : position
   const shownDuration = casting ? castDuration || duration : duration
 
-  const art = hiResArt || current.artwork
+  const ytLike = /^[-\w]{11}$/.test(current.id)
+  const artCandidates: string[] = []
+  if (hiResArt) artCandidates.push(hiResArt)
+  if (current.artwork) artCandidates.push(current.artwork)
+  if (ytLike) {
+    artCandidates.push(`https://i.ytimg.com/vi/${current.id}/hqdefault.jpg`)
+    artCandidates.push(`https://i.ytimg.com/vi/${current.id}/mqdefault.jpg`)
+  }
+  const artSrc = artStage < artCandidates.length ? artCandidates[artStage] : null
   const fav = isFavorite(current.id)
   const upNext = queue.slice(index + 1)
 
@@ -220,7 +238,13 @@ export function NowPlaying() {
               <span className="text-[11px] uppercase tracking-widest text-muted-foreground">Now Playing</span>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                 <AudioWaveform className="h-3 w-3" />
-                {casting ? 'Casting' : hifiActive ? 'Hi-Fi direct stream' : 'Stable mode'}
+                {casting
+                  ? 'Casting'
+                  : hifiActive
+                    ? 'Hi-Fi direct stream'
+                    : embedMode
+                      ? 'YouTube player'
+                      : 'Stable mode'}
                 {current.source === 'au' && (
                   <span className="rounded-full bg-primary/15 text-primary px-1.5 font-semibold">Audius</span>
                 )}
@@ -235,14 +259,21 @@ export function NowPlaying() {
 
           {/* artwork */}
           <div className="relative mx-auto mt-4 w-[min(56vw,300px)] aspect-square shrink-0 overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-primary/20">
-            <img
-              src={art}
-              alt={current.title}
-              className={cn(
-                'h-full w-full object-cover transition-transform duration-700',
-                isPlaying ? 'scale-100' : 'scale-95'
-              )}
-            />
+            {artSrc ? (
+              <img
+                src={artSrc}
+                alt={current.title}
+                onError={() => setArtStage((s) => s + 1)}
+                className={cn(
+                  'h-full w-full object-cover transition-transform duration-700',
+                  isPlaying ? 'scale-100' : 'scale-95'
+                )}
+              />
+            ) : (
+              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                <AudioWaveform className="h-10 w-10" />
+              </div>
+            )}
             {isBuffering && (
               <div className="absolute inset-0 flex items-center justify-center bg-black/40">
                 <Loader2 className="h-8 w-8 animate-spin text-white" />

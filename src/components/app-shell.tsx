@@ -6,6 +6,7 @@ import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
 import { MiniPlayer } from '@/components/player/mini-player'
 import { NowPlaying } from '@/components/player/now-playing'
+import { VideoBubble } from '@/components/player/video-bubble'
 import { HomeView } from '@/views/home-view'
 import { ExploreView } from '@/views/explore-view'
 import { LibraryView } from '@/views/library-view'
@@ -183,23 +184,8 @@ export function AppShell() {
           ))}
         </nav>
 
-        {/* Hidden YouTube iframe host (audio-first playback) */}
-        <div
-          aria-hidden
-          style={{
-            position: 'fixed',
-            right: 6,
-            bottom: 6,
-            width: 80,
-            height: 45,
-            opacity: 0.01,
-            pointerEvents: 'none',
-            zIndex: -1,
-            overflow: 'hidden',
-          }}
-        >
-          <div id="dhun-yt-host" />
-        </div>
+        {/* Visible YouTube player bubble (official embed, audio-first) */}
+        <VideoBubble />
       </div>
     </ThemeProvider>
   )
