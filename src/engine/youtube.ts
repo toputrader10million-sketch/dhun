@@ -110,6 +110,9 @@ export class YouTubeEngine {
               resolve()
             },
             onStateChange: (e: any) => {
+              // Re-assert high quality on (re)buffering — adaptive streaming
+              // can downgrade after stalls.
+              if (e.data === 1 || e.data === 3) this.requestHighQuality()
               this.events.onState?.(mapState(e.data))
             },
             onError: (e: any) => {
@@ -128,7 +131,34 @@ export class YouTubeEngine {
     this.currentVideoId = videoId
     await this.ensure()
     if (!this.player?.loadVideoById) return
-    this.player.loadVideoById({ videoId, startSeconds })
+    // Audio quality: the embed picks the rendition from the QUALITY TIER, and a
+    // small player defaults to a low tier (≈50-96 kbps audio — the reported
+    // "very bad sound quality"). Ask for hd720 explicitly so YouTube serves
+    // the high-bitrate audio track (≈128-192 kbps Opus) that ships with it.
+    this.player.loadVideoById({
+      videoId,
+      startSeconds,
+      suggestedQuality: 'hd720',
+    })
+    this.requestHighQuality()
+  }
+
+  /**
+   * Best-effort quality nudge. `setPlaybackQuality` is deprecated in newer
+   * API revisions but still honoured by most embed builds; failures are
+   * harmless because `suggestedQuality` already biases the initial selection.
+   */
+  private requestHighQuality() {
+    const p = this.player
+    if (!p) return
+    const attempt = () => {
+      try {
+        p.setPlaybackQuality?.('hd720')
+        p.setPlaybackQualityRange?.('hd720', 'hd720')
+      } catch {}
+    }
+    setTimeout(attempt, 250)
+    setTimeout(attempt, 1500)
   }
 
   pause() {
