@@ -30,6 +30,7 @@ interface SettingsState {
   eqPreset: EqPreset
   eqGains: number[]
   autoplayRadio: boolean
+  gaplessPlayback: boolean
   autoOfflineFavorites: boolean
   maxBitrate: number // 0 = no cap
   showMiniArt: boolean
@@ -40,6 +41,7 @@ interface SettingsState {
   setEqPreset: (p: EqPreset) => void
   setEqGain: (index: number, value: number) => void
   setAutoplayRadio: (v: boolean) => void
+  setGaplessPlayback: (v: boolean) => void
   setAutoOfflineFavorites: (v: boolean) => void
   setMaxBitrate: (v: number) => void
   setShowMiniArt: (v: boolean) => void
@@ -55,6 +57,7 @@ export const useSettings = create<SettingsState>()(
       eqPreset: 'flat',
       eqGains: EQ_PRESETS.flat,
       autoplayRadio: true,
+      gaplessPlayback: true,
       autoOfflineFavorites: false,
       maxBitrate: 0,
       showMiniArt: true,
@@ -71,6 +74,7 @@ export const useSettings = create<SettingsState>()(
           return { eqPreset: 'custom', eqGains: gains }
         }),
       setAutoplayRadio: (autoplayRadio) => set({ autoplayRadio }),
+      setGaplessPlayback: (gaplessPlayback) => set({ gaplessPlayback }),
       setAutoOfflineFavorites: (autoOfflineFavorites) => set({ autoOfflineFavorites }),
       setMaxBitrate: (maxBitrate) => set({ maxBitrate }),
       setShowMiniArt: (showMiniArt) => set({ showMiniArt }),

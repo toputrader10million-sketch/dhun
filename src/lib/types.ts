@@ -51,6 +51,31 @@ export interface InstanceStatus {
   latencyMs: number
 }
 
+// Health-dashboard payload from GET /api/instances (includes history)
+export interface InstanceHealthSample {
+  t: number
+  ok: boolean
+  ms: number | null
+}
+
+export interface InstanceHealth {
+  name: string
+  url: string
+  ok: boolean
+  latencyMs: number
+  avgLatencyMs: number
+  uptimePct: number
+  checks: number
+  history: InstanceHealthSample[]
+  preferred: boolean
+}
+
+export interface InstanceHealthResponse {
+  checkedAt: string
+  preferred: string
+  instances: InstanceHealth[]
+}
+
 export interface AudioStream {
   url: string
   bitrate: number

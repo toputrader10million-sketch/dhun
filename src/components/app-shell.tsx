@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useSyncExternalStore } from 'react'
 import { ThemeProvider } from 'next-themes'
-import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform } from 'lucide-react'
+import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
 import { MiniPlayer } from '@/components/player/mini-player'
@@ -9,6 +9,7 @@ import { NowPlaying } from '@/components/player/now-playing'
 import { HomeView } from '@/views/home-view'
 import { ExploreView } from '@/views/explore-view'
 import { LibraryView } from '@/views/library-view'
+import { NetworkView } from '@/views/network-view'
 import { SettingsView } from '@/views/settings-view'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
@@ -21,6 +22,7 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'explore', label: 'Explore', icon: Compass },
   { id: 'library', label: 'Library', icon: LibraryIcon },
+  { id: 'network', label: 'Network', icon: RadioTower },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
@@ -145,6 +147,7 @@ export function AppShell() {
             {view === 'home' && <HomeView key={region} />}
             {view === 'explore' && <ExploreView />}
             {view === 'library' && <LibraryView />}
+            {view === 'network' && <NetworkView />}
             {view === 'settings' && <SettingsView />}
           </main>
 

@@ -47,10 +47,33 @@ interface PlayerState {
   cycleRepeat: () => void
   startRadio: () => Promise<void>
   castCurrent: () => Promise<boolean>
+  resumeHandoff: (opts: {
+    items: MusicItem[]
+    index: number
+    position: number
+    shuffle?: boolean
+    repeat?: RepeatMode
+  }) => void
 }
 
 function toQueued(item: MusicItem): QueuedTrack {
   return { ...item, queuedAt: Date.now() }
+}
+
+/**
+ * Same-origin audio URL for a track — mirrors the resolution order of
+ * startPlayback (offline cache → Audius proxy → Hi-Fi API proxy).
+ * Returns null when gapless preload is not possible (iframe mode / unknown).
+ */
+function resolveAudioUrl(item: MusicItem): string | null {
+  const offline = useOffline.getState()
+  if (offline.isDownloaded(item.id)) {
+    const u = offline.urlFor(item.id)
+    if (u) return u
+  }
+  if (item.source === 'au') return `/api/audius/stream/${item.id}`
+  if (useSettings.getState().playbackMode === 'hifi') return `/api/audio/${item.id}`
+  return null
 }
 
 function shuffleIndices(len: number, first: number): number[] {
@@ -100,6 +123,25 @@ export const usePlayer = create<PlayerState>()(
         youtubeEngine.stop()
       }
 
+      /** Pre-buffer the next queue track into the Hi-Fi standby element. */
+      function schedulePreload() {
+        const s = get()
+        if (!useSettings.getState().gaplessPlayback) return
+        if (!s.hifiActive || s.queue.length === 0) return
+        const nextIdx = s.index + 1
+        const nextItem =
+          s.repeat === 'one'
+            ? s.queue[s.index] // re-preload the current track → instant repeat-one
+            : nextIdx < s.queue.length
+              ? s.queue[nextIdx]
+              : s.repeat === 'all'
+                ? s.queue[0]
+                : undefined
+        if (!nextItem) return
+        const url = resolveAudioUrl(nextItem)
+        if (url) hifiEngine.preload(url)
+      }
+
       async function startPlayback(item: MusicItem, startSeconds = 0) {
         const mode = useSettings.getState().playbackMode
         set({ loadingTrackId: item.id, isBuffering: true, hiResArt: null, position: startSeconds })
@@ -134,6 +176,7 @@ export const usePlayer = create<PlayerState>()(
             const ok = await hifiEngine.playUrl(url, startSeconds)
             if (ok) {
               set({ isBuffering: false, loadingTrackId: null })
+              schedulePreload()
               sideEffects(item)
               return
             }
@@ -147,6 +190,7 @@ export const usePlayer = create<PlayerState>()(
           const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds)
           if (ok) {
             set({ isBuffering: false, loadingTrackId: null })
+            schedulePreload()
             sideEffects(item)
             return
           }
@@ -185,6 +229,7 @@ export const usePlayer = create<PlayerState>()(
         }
 
         set({ hifiActive: hifiOk, isBuffering: false, loadingTrackId: null })
+        if (hifiOk) schedulePreload()
         sideEffects(item)
       }
 
@@ -306,6 +351,8 @@ export const usePlayer = create<PlayerState>()(
               if (dur > 0) set({ duration: dur })
               set({ position: cur })
               updateMediaPositionState(cur, dur || s.duration)
+              // Late preload: covers seeks, slow starts, and long first tracks.
+              if (dur > 0 && dur - cur < 25) schedulePreload()
             },
             onError: () => {
               if (!get().hifiActive) return
@@ -517,6 +564,20 @@ export const usePlayer = create<PlayerState>()(
           set({ repeat: modes[(i + 1) % modes.length] })
         },
 
+        resumeHandoff: ({ items, index, position, shuffle, repeat }) => {
+          const queue = items.map(toQueued)
+          if (queue.length === 0) return
+          const idx = Math.max(0, Math.min(queue.length - 1, index))
+          set({
+            queue,
+            index: idx,
+            hiResArt: null,
+            ...(typeof shuffle === 'boolean' ? { shuffle } : {}),
+            ...(repeat ? { repeat } : {}),
+          })
+          startPlayback(queue[idx], position > 3 ? position : 0)
+        },
+
         startRadio: async () => {
           const cur = current()
           if (!cur) {
@@ -545,20 +606,48 @@ export const usePlayer = create<PlayerState>()(
         },
       }
 
-      function handleEnded() {
+      async function handleEnded() {
         const s = get()
         if (s.repeat === 'one') {
-          get().playQueueAt(s.index)
+          get().playQueueAt(s.index) // playUrl promotion makes this near-instant
           return
         }
         const nextIdx = s.index + 1
-        if (nextIdx < s.queue.length) {
-          get().playQueueAt(nextIdx)
-        } else if (s.repeat === 'all' && s.queue.length > 0) {
-          get().playQueueAt(0)
-        } else {
-          maybeRadioThenNext(true)
+        const hasNext = nextIdx < s.queue.length
+        const wraps = !hasNext && s.repeat === 'all' && s.queue.length > 0
+        if (hasNext || wraps) {
+          const idx = wraps ? 0 : nextIdx
+          const item = s.queue[idx]
+          const gaplessReady =
+            useSettings.getState().gaplessPlayback &&
+            s.hifiActive &&
+            item != null &&
+            hifiEngine.getPreloadedUrl() !== null
+          if (item && gaplessReady) {
+            // ZERO-GAP advance: the next track is already buffered in standby.
+            set({
+              index: idx,
+              isPlaying: true,
+              isBuffering: true,
+              position: 0,
+              hiResArt: null,
+              loadingTrackId: null,
+            })
+            const ok = await hifiEngine.swapToPreloaded()
+            if (ok) {
+              set({ isBuffering: false })
+              updateMediaMetadata(item)
+              setMediaPlaybackState('playing')
+              sideEffects(item)
+              schedulePreload()
+              return
+            }
+            set({ isPlaying: false }) // promotion failed → normal path below
+          }
+          get().playQueueAt(idx)
+          return
         }
+        maybeRadioThenNext(true)
       }
     },
     {

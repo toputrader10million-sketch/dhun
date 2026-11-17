@@ -9,13 +9,14 @@ datasource db {
 
 // Lightweight device-sync user (no auth; identified by code or dhun_uid cookie)
 model User {
-  id        String         @id @default(cuid())
-  code      String         @unique
-  name      String?
-  createdAt DateTime       @default(now())
-  favorites Favorite[]
-  playlists Playlist[]
-  history   HistoryEntry[]
+  id           String         @id @default(cuid())
+  code         String         @unique
+  name         String?
+  createdAt    DateTime       @default(now())
+  favorites    Favorite[]
+  playlists    Playlist[]
+  history      HistoryEntry[]
+  queueHandoffs QueueHandoff[]
 }
 
 model Favorite {
@@ -76,4 +77,21 @@ model HistoryEntry {
 
   @@index([playedAt])
   @@index([userId, playedAt])
+}
+
+// Cross-device queue handoff — a snapshot of the playing queue ("continue on
+// another device"). items is a JSON array of QueuedTrack objects.
+model QueueHandoff {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromDevice String   @default("Unknown device")
+  trackIndex Int      @default(0)
+  position   Int      @default(0)
+  shuffle    Boolean  @default(false)
+  repeat     String   @default("off")
+  items      String
+  createdAt  DateTime @default(now())
+
+  @@index([userId, createdAt])
 }

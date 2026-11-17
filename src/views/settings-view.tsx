@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
+  Activity,
   Download,
   Equal,
   Globe,
@@ -39,8 +40,10 @@ import { toast } from 'sonner'
 import { useSettings, EQ_PRESETS, applyAccent, type AccentColor, type EqPreset } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
+import { useUi } from '@/store/ui'
 import { triggerInstall } from '@/components/pwa/register-sw'
 import { useCast } from '@/lib/cast'
+import { HandoffDialog } from '@/components/player/handoff-dialog'
 import type { InstanceStatus } from '@/lib/types'
 import { EQ_FREQUENCIES } from '@/engine/hifi'
 import { cn } from '@/lib/utils'
@@ -107,15 +110,6 @@ export function SettingsView() {
       alive = false
     }
   }, [])
-
-  const testInstances = () => {
-    setTesting(true)
-    fetch('/api/instances')
-      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
-      .then((d: { instances: InstanceStatus[] }) => setInstances(d.instances || []))
-      .catch(() => toast.error('Could not test instances'))
-      .finally(() => setTesting(false))
-  }
 
   useEffect(() => {
     applyAccent(s.accent)
@@ -231,6 +225,16 @@ export function SettingsView() {
                 <SelectItem value="hifi">Hi-Fi (beta)</SelectItem>
               </SelectContent>
             </Select>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="gapless-toggle">Gapless playback</Label>
+              <p className="text-xs text-muted-foreground">
+                Pre-buffers the next track so queue transitions are seamless. Active in Hi-Fi mode
+                (direct streams, offline copies and Audius).
+              </p>
+            </div>
+            <Switch id="gapless-toggle" checked={s.gaplessPlayback} onCheckedChange={s.setGaplessPlayback} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
@@ -501,6 +505,15 @@ export function SettingsView() {
                 }}
               />
             </div>
+
+            <div className="mt-1 rounded-xl bg-accent/30 p-3">
+              <p className="text-xs font-medium mb-1.5">Cross-device queue handoff</p>
+              <p className="text-[11px] text-muted-foreground mb-2.5">
+                Send this device&apos;s queue to your other devices and continue listening exactly
+                where you left off — same track, same position.
+              </p>
+              <HandoffDialog variant="button" />
+            </div>
           </div>
         ) : (
           <div className="rounded-xl bg-destructive/10 p-3 text-sm">
@@ -557,24 +570,29 @@ export function SettingsView() {
           <h2 className="flex items-center gap-2 font-semibold">
             <RadioTower className="h-4 w-4 text-primary" /> Music network
           </h2>
-          <Button variant="outline" size="sm" onClick={testInstances} disabled={testing} className="rounded-full">
-            {testing ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : null} Re-test
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-1.5"
+            onClick={() => useUi.getState().setView('network')}
+          >
+            <Activity className="h-3.5 w-3.5" /> Health dashboard
           </Button>
         </div>
         {instances === null ? (
           <p className="text-xs text-muted-foreground">Testing music network instances…</p>
         ) : (
-          <ul className="space-y-2">
+          <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {instances.map((inst) => (
-              <li key={inst.url} className="flex items-center justify-between text-sm">
-                <span className="flex items-center gap-2">
+              <li key={inst.url} className="flex items-center justify-between gap-2 text-sm">
+                <span className="flex items-center gap-2 min-w-0">
                   <span
-                    className={cn('h-2 w-2 rounded-full', inst.ok ? 'bg-emerald-500' : 'bg-destructive')}
+                    className={cn('h-2 w-2 shrink-0 rounded-full', inst.ok ? 'bg-emerald-500' : 'bg-destructive')}
                     aria-hidden
                   />
-                  {inst.name}
+                  <span className="truncate">{inst.name}</span>
                 </span>
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
                   {inst.ok ? `${inst.latencyMs} ms` : 'down'}
                 </span>
               </li>

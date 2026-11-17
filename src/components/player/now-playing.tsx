@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { TrackRow } from '@/components/track-row'
 import { LyricsPanel } from './lyrics-panel'
+import { HandoffDialog } from './handoff-dialog'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
@@ -226,7 +227,10 @@ export function NowPlaying() {
                 {hiResArt && ' • HD art'}
               </span>
             </div>
-            <SleepTimerDialog />
+            <div className="flex items-center">
+              <HandoffDialog variant="icon" />
+              <SleepTimerDialog />
+            </div>
           </div>
 
           {/* artwork */}
