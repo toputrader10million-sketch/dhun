@@ -17,6 +17,7 @@ import {
   Zap,
   CloudUpload,
   Copy,
+  Crown,
   Link2,
   HardDrive,
   Heart,
@@ -68,11 +69,18 @@ const REGIONS = [
   { code: 'JP', label: 'Japan' },
 ]
 
-const ACCENTS: { id: AccentColor; label: string; swatch: string }[] = [
+const ACCENTS: { id: AccentColor; label: string; swatch: string; gold?: boolean }[] = [
   { id: 'rose', label: 'Rose', swatch: 'bg-[oklch(0.645_0.246_16.44)]' },
   { id: 'amber', label: 'Amber', swatch: 'bg-[oklch(0.769_0.188_70.08)]' },
   { id: 'violet', label: 'Violet', swatch: 'bg-[oklch(0.606_0.25_292.72)]' },
   { id: 'emerald', label: 'Emerald', swatch: 'bg-[oklch(0.696_0.17_162.48)]' },
+  {
+    id: 'gold',
+    label: 'Gold',
+    swatch:
+      'bg-gradient-to-br from-[oklch(0.88_0.13_95)] via-[oklch(0.78_0.15_85)] to-[oklch(0.64_0.13_70)]',
+    gold: true,
+  },
 ]
 
 export function SettingsView() {
@@ -147,6 +155,61 @@ export function SettingsView() {
     <div className="px-4 sm:px-6 py-4 max-w-2xl mx-auto pb-16">
       <h1 className="text-2xl font-extrabold tracking-tight mb-6">Settings</h1>
 
+      {/* Dhun Premium */}
+      <section
+        aria-label="Dhun Premium"
+        className="dhun-fade-up mb-6 rounded-2xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] via-[oklch(0.78_0.15_85)] to-[oklch(0.6_0.12_60)] p-[1.5px] shadow-lg shadow-amber-500/10"
+      >
+        <div className="rounded-[calc(var(--radius-lg)-1px)] bg-card p-4 sm:p-5">
+          <div className="flex items-start gap-3">
+            <span
+              className="dhun-shimmer flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] to-[oklch(0.64_0.13_70)] shadow-md shadow-amber-500/25"
+              aria-hidden
+            >
+              <Crown className="h-5 w-5 fill-current text-[oklch(0.42_0.09_65)]" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="bg-gradient-to-r from-[oklch(0.5_0.11_65)] via-[oklch(0.68_0.14_85)] to-[oklch(0.5_0.11_60)] bg-clip-text text-base font-bold text-transparent">
+                  Dhun Premium
+                </h2>
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  Free forever
+                </span>
+              </div>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Unlock the gold theme, animated visuals &amp; priority experience — free forever, no
+                payment.
+              </p>
+            </div>
+          </div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {!s.premium ? (
+              <Button
+                onClick={() => s.setPremium(true)}
+                className="dhun-shimmer gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 font-semibold text-amber-950 shadow-md shadow-amber-500/25 hover:from-amber-300 hover:to-yellow-400"
+              >
+                <Crown className="h-4 w-4 fill-current" /> Activate Premium
+              </Button>
+            ) : (
+              <>
+                <span className="dhun-shimmer inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-1.5 text-xs font-bold text-amber-950 shadow-md shadow-amber-500/25">
+                  <Crown className="h-4 w-4 fill-current" /> Premium active
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="rounded-full text-muted-foreground"
+                  onClick={() => s.setPremium(false)}
+                >
+                  Deactivate
+                </Button>
+              </>
+            )}
+          </div>
+        </div>
+      </section>
+
       {/* Appearance */}
       <section aria-label="Appearance" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
@@ -181,22 +244,60 @@ export function SettingsView() {
               <p className="text-xs text-muted-foreground">Used across the app UI.</p>
             </div>
             <div className="flex gap-2">
-              {ACCENTS.map((a) => (
-                <button
-                  key={a.id}
-                  onClick={() => {
-                    s.setAccent(a.id)
-                    applyAccent(a.id)
-                  }}
-                  className={cn(
-                    'h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all',
-                    a.swatch,
-                    s.accent === a.id ? 'ring-foreground' : 'ring-transparent hover:ring-muted-foreground/40'
-                  )}
-                  aria-label={`Accent ${a.label}`}
-                  aria-pressed={s.accent === a.id}
-                />
-              ))}
+              {ACCENTS.map((a) =>
+                a.gold ? (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      // Gold unlocks Dhun Premium (free) and switches to the gold theme.
+                      if (!s.premium) s.setPremium(true)
+                      s.setAccent('gold')
+                      applyAccent('gold')
+                    }}
+                    className={cn(
+                      'relative flex h-7 w-7 items-center justify-center rounded-full bg-gradient-to-br from-[oklch(0.88_0.13_95)] via-[oklch(0.78_0.15_85)] to-[oklch(0.64_0.13_70)] ring-2 ring-offset-2 ring-offset-background transition-all',
+                      s.accent === 'gold'
+                        ? 'ring-foreground'
+                        : 'ring-transparent hover:ring-muted-foreground/40'
+                    )}
+                    aria-label={`Accent ${a.label} (Dhun Premium)`}
+                    aria-pressed={s.accent === 'gold'}
+                    title={`${a.label} — Dhun Premium theme`}
+                  >
+                    <Crown
+                      className="h-3.5 w-3.5 fill-current text-[oklch(0.42_0.09_65)]"
+                      aria-hidden
+                    />
+                    {!s.premium && (
+                      <span
+                        className="absolute -top-2 -right-2 z-10"
+                        aria-hidden
+                      >
+                        <span className="dhun-shimmer block rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-1.5 py-px text-[8px] font-bold leading-tight text-amber-950 shadow">
+                          Premium
+                        </span>
+                      </span>
+                    )}
+                  </button>
+                ) : (
+                  <button
+                    key={a.id}
+                    onClick={() => {
+                      s.setAccent(a.id)
+                      applyAccent(a.id)
+                    }}
+                    className={cn(
+                      'h-7 w-7 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all',
+                      a.swatch,
+                      s.accent === a.id
+                        ? 'ring-foreground'
+                        : 'ring-transparent hover:ring-muted-foreground/40'
+                    )}
+                    aria-label={`Accent ${a.label}`}
+                    aria-pressed={s.accent === a.id}
+                  />
+                )
+              )}
             </div>
           </div>
         </div>

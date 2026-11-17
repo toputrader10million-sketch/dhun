@@ -163,6 +163,16 @@
   --primary-foreground: oklch(0.205 0 0);
   --ring: oklch(0.696 0.17 162.48);
 }
+[data-accent='gold'] {
+  --primary: oklch(0.78 0.15 85);
+  --primary-foreground: oklch(0.205 0 0);
+  --ring: oklch(0.83 0.14 85);
+}
+.dark[data-accent='gold'] {
+  --primary: oklch(0.83 0.14 85);
+  --primary-foreground: oklch(0.205 0 0);
+  --ring: oklch(0.83 0.14 85);
+}
 
 /* Dhun app extras */
 .dhun-scroll::-webkit-scrollbar {
@@ -186,3 +196,82 @@
   transition: transform 0.12s ease-out;
   transform-origin: bottom;
 }
+
+/* ================= Dhun motion utilities =================
+ * Reusable animation classes (all respect prefers-reduced-motion):
+ * - .dhun-fade-up     entrance: fade + rise. Supports stagger via inline
+ *                     style={{ animationDelay: '80ms' }} (longhand inline
+ *                     style overrides the shorthand delay).
+ * - .dhun-pulse-glow  subtle scale + glow pulse (e.g. play button while playing).
+ * - .dhun-shimmer     gold shimmer sweep for premium badges (uses ::after,
+ *                     so the element needs relative positioning — included).
+ */
+.dhun-fade-up {
+  animation: dhun-fade-up 500ms ease-out both;
+}
+@keyframes dhun-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.dhun-pulse-glow {
+  animation: dhun-pulse-glow 2s ease-in-out infinite;
+}
+@keyframes dhun-pulse-glow {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 0 color-mix(in oklab, var(--primary) 45%, transparent),
+      0 10px 30px -10px color-mix(in oklab, var(--primary) 60%, transparent);
+  }
+  50% {
+    transform: scale(1.06);
+    box-shadow:
+      0 0 0 14px color-mix(in oklab, var(--primary) 0%, transparent),
+      0 10px 40px -8px color-mix(in oklab, var(--primary) 80%, transparent);
+  }
+}
+
+.dhun-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.dhun-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 20%,
+    rgb(255 244 214 / 0.55) 50%,
+    transparent 80%
+  );
+  transform: translateX(-100%);
+  animation: dhun-shimmer 2.6s ease-in-out infinite;
+}
+@keyframes dhun-shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  60%,
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+/* Disable all Dhun animations for users who prefer reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .dhun-fade-up,
+  .dhun-pulse-glow,
+  .dhun-shimmer::after {
+    animation: none;
+  }
+}
+
+/* dhun motion: recompiled */

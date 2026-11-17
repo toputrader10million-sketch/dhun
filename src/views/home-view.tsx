@@ -5,6 +5,7 @@ import { TrackCardRow } from '@/components/track-card'
 import { TrackRow } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { ForYou } from '@/components/for-you'
 import type { HomeResponse, MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
@@ -22,6 +23,7 @@ export function HomeView({ region }: { region?: string }) {
   const history = useLibrary((s) => s.history)
   const loadAll = useLibrary((s) => s.loadAll)
   const [refreshing, setRefreshing] = useState(false)
+  const [refreshCount, setRefreshCount] = useState(0)
 
   useEffect(() => {
     loadAll()
@@ -71,6 +73,7 @@ export function HomeView({ region }: { region?: string }) {
 
   const refresh = () => {
     setRefreshing(true)
+    setRefreshCount((c) => c + 1)
     fetch(`/api/home?region=${activeRegion}&t=${Date.now()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((d) => setData(d))
@@ -132,16 +135,24 @@ export function HomeView({ region }: { region?: string }) {
         </section>
       )}
 
-      {/* curated sections */}
+      {/* curated sections (staggered entrance animation) */}
       {data?.sections?.map((section, si) => (
-        <TrackCardRow
+        <div
           key={section.title}
-          title={section.title}
-          items={section.items}
-          loading={loading}
-          onPlayAll={section.items.length > 0 ? () => playItem(section.items[0], section.items) : undefined}
-        />
+          className="dhun-fade-up"
+          style={{ animationDelay: `${Math.min(si * 90, 450)}ms` }}
+        >
+          <TrackCardRow
+            title={section.title}
+            items={section.items}
+            loading={loading}
+            onPlayAll={section.items.length > 0 ? () => playItem(section.items[0], section.items) : undefined}
+          />
+        </div>
       ))}
+
+      {/* Made for you — personalised from real listening data */}
+      <ForYou refreshKey={refreshCount} />
 
       {/* Audius trending (indie / direct-stream catalog) */}
       <section className="mb-8" aria-label="Audius trending">

@@ -123,7 +123,14 @@ async function handleOfflineCache(trackId, url) {
 
     const res = await fetch(url, { cache: 'reload' })
     if (!res.ok) {
-      await broadcast({ type: 'OFFLINE_ERROR', trackId, error: res.status })
+      // Surface the API's machine-readable reason when present (e.g.
+      // 'youtube-download-blocked') so the UI can explain honestly.
+      let reason = String(res.status)
+      try {
+        const data = await res.json()
+        if (data && typeof data.reason === 'string') reason = data.reason
+      } catch {}
+      await broadcast({ type: 'OFFLINE_ERROR', trackId, error: reason })
       return
     }
 

@@ -1,11 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPiped, parseStreamItem, cacheGet, cacheSet } from '@/lib/piped'
-import type { SearchResponse, SearchFilter } from '@/lib/types'
+import { ytWebSearch, ytMusicSearch, SEARCH_SP } from '@/lib/ytmusic'
+import type { SearchResponse, SearchFilter, MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
 
 const VALID_FILTERS: SearchFilter[] = ['music_songs', 'videos', 'albums', 'artists', 'playlists']
 const SEARCH_TTL = 10 * 60 * 1000
+
+async function innertubeSearch(q: string, filter: SearchFilter, page?: string): Promise<{ items: MusicItem[]; nextPage?: string }> {
+  switch (filter) {
+    case 'music_songs': {
+      const items = await ytMusicSearch(q)
+      return { items } // music search has no cheap pagination — plenty of results per query
+    }
+    case 'videos':
+      return await ytWebSearch(q, { sp: SEARCH_SP.videos, continuation: page || undefined })
+    case 'playlists':
+      return await ytWebSearch(q, { sp: SEARCH_SP.playlists, continuation: page || undefined })
+    case 'artists':
+      return await ytWebSearch(q, { sp: SEARCH_SP.channels, continuation: page || undefined })
+    case 'albums':
+    default: {
+      // albums have no dedicated WEB sp param — unfiltered search surfaces them
+      return await ytWebSearch(q, { continuation: page || undefined })
+    }
+  }
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,20 +44,24 @@ export async function GET(req: NextRequest) {
     const cached = cacheGet<SearchResponse>(cacheKey)
     if (cached) return NextResponse.json(cached)
 
-    let path = `/search?q=${encodeURIComponent(q)}&filter=${filter}`
-    if (page) path += `&nextpage=${encodeURIComponent(page)}`
+    let items: MusicItem[] = []
+    let nextPage: string | undefined
 
-    const data = await fetchPiped<{
-      items?: Array<Record<string, unknown>>
-      nextpage?: string
-    }>(path)
-
-    const items = (data.items ?? []).map(parseStreamItem)
-    const out: SearchResponse = {
-      items,
-      nextPage: typeof data.nextpage === 'string' && data.nextpage ? data.nextpage : undefined,
-      filter,
+    // Primary: InnerTube (works from datacenter IPs; Piped is dead on Vercel)
+    try {
+      const r = await innertubeSearch(q, filter, page)
+      items = r.items
+      nextPage = r.nextPage
+    } catch {
+      // Fallback: legacy Piped path (works on self-hosted setups with clean IPs)
+      let path = `/search?q=${encodeURIComponent(q)}&filter=${filter}`
+      if (page) path += `&nextpage=${encodeURIComponent(page)}`
+      const data = await fetchPiped<{ items?: Array<Record<string, unknown>>; nextpage?: string }>(path)
+      items = (data.items ?? []).map(parseStreamItem)
+      nextPage = typeof data.nextpage === 'string' && data.nextpage ? data.nextpage : undefined
     }
+
+    const out: SearchResponse = { items, nextPage, filter }
     cacheSet(cacheKey, out, SEARCH_TTL)
     return NextResponse.json(out)
   } catch (err) {

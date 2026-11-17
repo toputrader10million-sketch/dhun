@@ -14,6 +14,7 @@ import {
   Radio,
   Repeat,
   Repeat1,
+  Share2,
   Shuffle,
   SkipBack,
   SkipForward,
@@ -44,8 +45,11 @@ import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useCast } from '@/lib/cast'
+import { shareTrack } from '@/lib/share'
+import { toast } from 'sonner'
 import { formatDuration } from '@/lib/format'
 import { hifiEngine } from '@/engine/hifi'
+import { youtubeEngine } from '@/engine/youtube'
 import { cn } from '@/lib/utils'
 
 function Visualizer() {
@@ -87,6 +91,14 @@ function Visualizer() {
   )
 }
 
+/** Sleep-timer fade guard: true once the volume ramp has started for the current timer. */
+let fadeApplied = false
+
+function engineSetVolume(percent: number, hifiActive: boolean) {
+  if (hifiActive) hifiEngine.setVolume(percent)
+  else youtubeEngine.setVolume(percent)
+}
+
 function SleepTimerDialog() {
   const togglePlay = usePlayer((s) => s.togglePlay)
   const [minutes, setMinutes] = useState<number | null>(null)
@@ -94,18 +106,38 @@ function SleepTimerDialog() {
 
   useEffect(() => {
     if (minutes === null) return
+    fadeApplied = false // new timer → reset the fade guard
     const endAt = Date.now() + minutes * 60_000
     const iv = setInterval(() => {
       const left = Math.max(0, Math.round((endAt - Date.now()) / 1000))
       setRemaining(left)
+      const st = usePlayer.getState()
+      const baseVolume = useSettings.getState().volume
+      // Ramp the volume down over the final 5 seconds while playback is active.
+      if (left > 0 && left <= 5 && st.isPlaying) {
+        fadeApplied = true
+        engineSetVolume(Math.round((baseVolume * left) / 5), st.hifiActive)
+      }
       if (left <= 0) {
         clearInterval(iv)
         setMinutes(null)
         setRemaining(null)
-        if (usePlayer.getState().isPlaying) togglePlay()
+        if (fadeApplied) {
+          // Restore the user's volume before/after stopping.
+          engineSetVolume(baseVolume, st.hifiActive)
+          fadeApplied = false
+        }
+        if (st.isPlaying) togglePlay()
       }
     }, 1000)
-    return () => clearInterval(iv)
+    return () => {
+      clearInterval(iv)
+      // Timer canceled or dialog unmounted mid-fade → restore volume.
+      if (fadeApplied) {
+        engineSetVolume(useSettings.getState().volume, usePlayer.getState().hifiActive)
+        fadeApplied = false
+      }
+    }
   }, [minutes, togglePlay])
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -138,6 +170,9 @@ function SleepTimerDialog() {
             </Button>
           ))}
         </div>
+        {minutes !== null && (
+          <p className="text-[11px] text-muted-foreground">Volume fades out before stop.</p>
+        )}
         {minutes !== null && (
           <Button
             variant="secondary"
@@ -332,7 +367,20 @@ export function NowPlaying() {
   return (
     <Drawer open={open} onOpenChange={setOpen} shouldScaleBackground={false}>
       <DrawerContent className="h-[100dvh] mt-0 rounded-t-none border-0 bg-background data-[vaul-drawer-direction=bottom]:max-h-[100dvh] data-[vaul-drawer-direction=bottom]:mt-0">
-        <div className="mx-auto flex w-full max-w-lg flex-1 min-h-0 flex-col overflow-y-auto dhun-scroll">
+        {/* Ambient blurred artwork backdrop (DrawerContent is `fixed`, so it
+            already provides the positioning context — do NOT add `relative`,
+            twMerge would strip `fixed` and break the drawer). */}
+        <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+          {artSrc && (
+            <img
+              src={artSrc}
+              alt=""
+              className="h-full w-full scale-125 object-cover blur-3xl opacity-20"
+            />
+          )}
+          <div className="absolute inset-0 bg-gradient-to-b from-background/40 via-background/70 to-background" />
+        </div>
+        <div className="relative mx-auto flex w-full max-w-lg flex-1 min-h-0 flex-col overflow-y-auto dhun-scroll">
           {/* a11y title for the drawer (visually hidden) */}
           <DrawerTitle className="sr-only">Now playing: {current.title}</DrawerTitle>
           {/* top bar */}
@@ -424,6 +472,25 @@ export function NowPlaying() {
               </button>
             )}
             <button
+              onClick={async () => {
+                const res = await shareTrack({ title: current.title, artist: current.artist })
+                if (res === 'copied') {
+                  toast.success('Link copied', {
+                    description: `${current.title} — ${current.artist}`,
+                  })
+                } else if (res === 'failed') {
+                  toast.error('Could not share', {
+                    description: 'Sharing is not supported on this device.',
+                  })
+                }
+              }}
+              className="rounded-full p-2 hover:bg-accent shrink-0"
+              aria-label="Share this song"
+              title="Share this song"
+            >
+              <Share2 className="h-5 w-5" />
+            </button>
+            <button
               onClick={() => toggleFavorite(current)}
               className="rounded-full p-2 hover:bg-accent shrink-0"
               aria-label="Toggle favorite"
@@ -465,7 +532,10 @@ export function NowPlaying() {
             </button>
             <button
               onClick={togglePlay}
-              className="rounded-full bg-primary text-primary-foreground p-4 shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-transform"
+              className={cn(
+                'rounded-full bg-primary text-primary-foreground p-4 shadow-lg shadow-primary/30 hover:scale-105 active:scale-95 transition-transform',
+                isPlaying && 'dhun-pulse-glow'
+              )}
               aria-label={isPlaying ? 'Pause' : 'Play'}
             >
               {isPlaying ? (

@@ -2,7 +2,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
-export type AccentColor = 'rose' | 'amber' | 'violet' | 'emerald'
+export type AccentColor = 'rose' | 'amber' | 'violet' | 'emerald' | 'gold'
 export type PlaybackMode = 'iframe' | 'hifi'
 export type EqPreset =
   | 'flat'
@@ -34,6 +34,8 @@ interface SettingsState {
   autoOfflineFavorites: boolean
   maxBitrate: number // 0 = no cap
   showMiniArt: boolean
+  premium: boolean
+  setPremium: (v: boolean) => void
   setAccent: (a: AccentColor) => void
   setRegion: (r: string) => void
   setPlaybackMode: (m: PlaybackMode) => void
@@ -61,6 +63,13 @@ export const useSettings = create<SettingsState>()(
       autoOfflineFavorites: false,
       maxBitrate: 0,
       showMiniArt: true,
+      premium: false,
+      // Activating premium switches to the gold theme; deactivating reverts gold → rose.
+      setPremium: (premium) =>
+        set((s) => ({
+          premium,
+          accent: premium ? 'gold' : s.accent === 'gold' ? 'rose' : s.accent,
+        })),
       setAccent: (accent) => set({ accent }),
       setRegion: (region) => set({ region }),
       setPlaybackMode: (playbackMode) => set({ playbackMode }),

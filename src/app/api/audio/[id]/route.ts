@@ -32,7 +32,13 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       ? err.errors.map((e) => (e instanceof Error ? e.message : String(e)))
       : [err instanceof Error ? err.message : String(err)]
     return NextResponse.json(
-      { error: `Failed to resolve audio for ${id}`, detail },
+      {
+        error: `Failed to resolve audio for ${id}`,
+        // Machine-readable reason — the service worker surfaces it to the
+        // offline download UI so we can give an honest, specific message.
+        reason: 'youtube-download-blocked',
+        detail,
+      },
       { status: 502 }
     )
   }

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPiped, parseStreamItem, cacheGet, cacheSet } from '@/lib/piped'
+import { ytWebSearch } from '@/lib/ytmusic'
 import type { HomeResponse, HomeSection, MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -16,15 +17,24 @@ const SECTIONS: Array<{ title: string; query: string }> = [
 
 async function fetchSection(query: string): Promise<MusicItem[]> {
   try {
-    const data = await fetchPiped<{ items?: Array<Record<string, unknown>> }>(
-      `/search?q=${encodeURIComponent(query)}&filter=music_songs`
-    )
-    return (data.items ?? [])
-      .map(parseStreamItem)
-      .filter((it) => it.duration >= 60 && it.duration <= 600 && it.id)
+    // Primary: InnerTube WEB search
+    const { items } = await ytWebSearch(query)
+    return items
+      .filter((it) => (it.duration === 0 || (it.duration >= 60 && it.duration <= 900)) && it.id)
       .slice(0, 20)
   } catch {
-    return []
+    // Fallback: legacy Piped path
+    try {
+      const data = await fetchPiped<{ items?: Array<Record<string, unknown>> }>(
+        `/search?q=${encodeURIComponent(query)}&filter=music_songs`
+      )
+      return (data.items ?? [])
+        .map(parseStreamItem)
+        .filter((it) => it.duration >= 60 && it.duration <= 600 && it.id)
+        .slice(0, 20)
+    } catch {
+      return []
+    }
   }
 }
 

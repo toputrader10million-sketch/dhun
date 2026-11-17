@@ -73,7 +73,9 @@ export const useOffline = create<OfflineStore>((set, get) => ({
               ? 'Track is too large to cache (150MB limit).'
               : result.error === 'timeout'
                 ? 'Download timed out. Check your connection.'
-                : `Reason: ${result.error}`,
+                : result.error === 'youtube-download-blocked' || result.error === 'no-stream'
+                  ? 'YouTube is blocking direct downloads right now — streaming still works. Audius tracks download fine.'
+                  : `Reason: ${result.error}`,
       })
       return false
     } catch {

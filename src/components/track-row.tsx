@@ -1,6 +1,6 @@
 'use client'
 import { memo, useState } from 'react'
-import { Heart, ListPlus, ListMusic, Play, Plus, Radio, Trash2, MoreVertical, Download } from 'lucide-react'
+import { Heart, ListPlus, ListMusic, Play, Plus, Radio, Share2, Trash2, MoreVertical, Download } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,8 @@ import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
 import { useOffline } from '@/store/offline'
+import { shareTrack } from '@/lib/share'
+import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
 
 const YT_VIDEO_ID_RE = /^[\w-]{11}$/
@@ -177,6 +179,20 @@ export const TrackRow = memo(function TrackRow({
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => startRadio()}>
               <Radio className="mr-2 h-4 w-4" /> Start radio
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={async () => {
+                const res = await shareTrack({ title: item.title, artist: item.artist })
+                if (res === 'copied') {
+                  toast.success('Link copied', { description: `${item.title} — ${item.artist}` })
+                } else if (res === 'failed') {
+                  toast.error('Could not share', {
+                    description: 'Sharing is not supported on this device.',
+                  })
+                }
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" /> Share
             </DropdownMenuItem>
             <DropdownMenuItem onClick={() => toggleFavorite(item)}>
               <Heart className={cn('mr-2 h-4 w-4', fav && 'fill-current text-primary')} />
