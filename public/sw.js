@@ -5,12 +5,28 @@
  *  - Network-first WITHOUT timeout (offline-only fallback): /api/* cacheable, navigations
  *    (A timeout fallback would serve stale HTML during slow dev/prod compiles)
  *  - Never cache: /api/streams (fresh best-effort attempts), cross-origin artwork/thumbnails
+ *  - Audio (/api/audio/*, /api/audius/stream/*): served from the explicit offline audio
+ *    cache when present. Caching is EXPLICIT only (via OFFLINE_CACHE messages) — the fetch
+ *    handler never auto-caches audio. Range requests other than 'bytes=0-' (mid-file seeks)
+ *    bypass the SW entirely so the media element talks to the network untouched.
  *  - Navigation: network-first, fallback to cached shell only when the network fails
+ *
+ * Message protocol (page -> SW via postMessage to the controlling worker):
+ *  { type: 'OFFLINE_CACHE',  url, trackId }  stream-download audio into AUDIO_CACHE
+ *  { type: 'OFFLINE_DELETE', url }           delete one cached audio entry
+ *  { type: 'OFFLINE_CLEAR' }                 delete every entry in AUDIO_CACHE
+ * Message protocol (SW -> page, broadcast to all window clients):
+ *  { type: 'OFFLINE_PROGRESS', trackId, loaded, total }   total = null when unknown
+ *  { type: 'OFFLINE_DONE', trackId, size, alreadyCached? }
+ *  { type: 'OFFLINE_ERROR', trackId, error }              error = HTTP status | 'too-large' | message
+ *  { type: 'OFFLINE_DELETED', url }
+ *  { type: 'OFFLINE_CLEARED' }
  */
-const VERSION = 'dhun-v2'
+const VERSION = 'dhun-v3'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const API_CACHE = `${VERSION}-api`
+const AUDIO_CACHE = `${VERSION}-audio` // starts with VERSION → survives activate cleanup
 
 const PRECACHE_URLS = [
   '/manifest.webmanifest',
@@ -20,6 +36,11 @@ const PRECACHE_URLS = [
 ]
 
 const API_CACHEABLE = ['/api/home', '/api/search', '/api/suggestions', '/api/lyrics', '/api/artwork', '/api/favorites', '/api/playlists', '/api/history', '/api/instances']
+
+const MAX_AUDIO_BYTES = 150 * 1024 * 1024 // hard cap: never cache audio >150MB
+const PROGRESS_EVERY_BYTES = 256 * 1024 // emit progress at least every 256KB…
+const PROGRESS_EVERY_PERCENT = 5 // …or every 5% when total size is known
+const inFlightAudio = new Set() // per-trackId dedupe of concurrent downloads
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -73,11 +94,159 @@ async function networkFirst(request, cacheName) {
   }
 }
 
+async function broadcast(message) {
+  try {
+    const clients = await self.clients.matchAll({ includeUncontrolled: true, type: 'window' })
+    for (const client of clients) client.postMessage(message)
+  } catch {}
+}
+
+/* ---------------- Offline audio cache (explicit, message-driven) ---------------- */
+
+async function handleOfflineCache(trackId, url) {
+  if (inFlightAudio.has(trackId)) return // dedupe: one download per trackId at a time
+  inFlightAudio.add(trackId)
+  try {
+    const cache = await caches.open(AUDIO_CACHE)
+    const existing = await cache.match(url)
+    if (existing) {
+      await broadcast({ type: 'OFFLINE_DONE', trackId, size: 0, alreadyCached: true })
+      return
+    }
+
+    const res = await fetch(url, { cache: 'reload' })
+    if (!res.ok) {
+      await broadcast({ type: 'OFFLINE_ERROR', trackId, error: res.status })
+      return
+    }
+
+    const contentType = res.headers.get('content-type') || 'audio/mp4'
+    const totalHeader = res.headers.get('content-length')
+    const total = totalHeader ? Number(totalHeader) : null
+
+    let blob
+    if (res.body) {
+      // Stream-read with progress ticks (every 256KB, or every 5% when total is known).
+      const reader = res.body.getReader()
+      const chunks = []
+      let loaded = 0
+      let nextBytes = PROGRESS_EVERY_BYTES
+      let nextPercent = PROGRESS_EVERY_PERCENT
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        chunks.push(value)
+        loaded += value.byteLength
+        if (loaded > MAX_AUDIO_BYTES) {
+          try {
+            await reader.cancel()
+          } catch {}
+          await broadcast({ type: 'OFFLINE_ERROR', trackId, error: 'too-large' })
+          return
+        }
+        const percent = total ? (loaded / total) * 100 : 0
+        if (loaded >= nextBytes || (total && percent >= nextPercent)) {
+          nextBytes = loaded + PROGRESS_EVERY_BYTES
+          nextPercent = percent + PROGRESS_EVERY_PERCENT
+          await broadcast({ type: 'OFFLINE_PROGRESS', trackId, loaded, total })
+        }
+      }
+      blob = new Blob(chunks, { type: contentType })
+    } else {
+      // No streaming body available — blob fallback without progress.
+      blob = await res.blob()
+      if (blob.size > MAX_AUDIO_BYTES) {
+        await broadcast({ type: 'OFFLINE_ERROR', trackId, error: 'too-large' })
+        return
+      }
+      await broadcast({ type: 'OFFLINE_PROGRESS', trackId, loaded: blob.size, total: blob.size })
+    }
+
+    await cache.put(
+      new Request(url),
+      new Response(blob, {
+        status: 200,
+        headers: {
+          'Content-Type': contentType,
+          'Content-Length': String(blob.size),
+          'Accept-Ranges': 'bytes',
+        },
+      })
+    )
+    await broadcast({ type: 'OFFLINE_DONE', trackId, size: blob.size })
+  } catch (err) {
+    await broadcast({ type: 'OFFLINE_ERROR', trackId, error: (err && err.message) || 'download-failed' })
+  } finally {
+    inFlightAudio.delete(trackId)
+  }
+}
+
+async function handleOfflineDelete(url) {
+  try {
+    const cache = await caches.open(AUDIO_CACHE)
+    await cache.delete(url)
+  } catch {}
+  await broadcast({ type: 'OFFLINE_DELETED', url })
+}
+
+async function handleOfflineClear() {
+  try {
+    const cache = await caches.open(AUDIO_CACHE)
+    const keys = await cache.keys()
+    await Promise.all(keys.map((key) => cache.delete(key)))
+  } catch {}
+  await broadcast({ type: 'OFFLINE_CLEARED' })
+}
+
+self.addEventListener('message', (event) => {
+  const data = event.data || {}
+  if (data.type === 'OFFLINE_CACHE' && data.url && data.trackId) {
+    event.waitUntil(handleOfflineCache(data.trackId, data.url))
+  } else if (data.type === 'OFFLINE_DELETE' && data.url) {
+    event.waitUntil(handleOfflineDelete(data.url))
+  } else if (data.type === 'OFFLINE_CLEAR') {
+    event.waitUntil(handleOfflineClear())
+  }
+})
+
+/* ---------------- Audio fetch handling ---------------- */
+
+/** Only the initial 'bytes=0-' request is cache-servable; any other range is a seek. */
+function shouldBypassAudio(request) {
+  const range = request.headers.get('range')
+  return !!range && range !== 'bytes=0-'
+}
+
+async function serveAudio(request) {
+  try {
+    const audio = await caches.open(AUDIO_CACHE)
+    const hit = await audio.match(request.url)
+    if (hit) return hit
+    // Cache miss → plain network passthrough. NO auto-caching here (explicit only).
+    return await fetch(request)
+  } catch {
+    try {
+      return await fetch(request)
+    } catch {
+      return new Response('Audio unavailable', {
+        status: 504,
+        headers: { 'Content-Type': 'text/plain' },
+      })
+    }
+  }
+}
+
 self.addEventListener('fetch', (event) => {
   const { request } = event
   if (request.method !== 'GET') return
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return // thumbnails/artwork from CDNs — bypass
+
+  // Offline audio: cache-first when explicitly downloaded; ranged seeks pass through.
+  if (url.pathname.startsWith('/api/audio/') || url.pathname.startsWith('/api/audius/stream/')) {
+    if (!shouldBypassAudio(request)) event.respondWith(serveAudio(request))
+    return
+  }
 
   if (url.pathname.startsWith('/api/streams')) return // never cache streams
   if (url.pathname.startsWith('/api/') && isCacheableApi(url)) {

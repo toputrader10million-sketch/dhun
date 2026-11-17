@@ -1,11 +1,12 @@
 'use client'
-import Image from 'next/image'
-import { Pause, Play, SkipBack, SkipForward, Heart, ChevronUp, X, ListMusic } from 'lucide-react'
+import { Pause, Play, SkipBack, SkipForward, Heart, ChevronUp, X, ListMusic, Cast, Download, Loader2 } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
+import { useOffline } from '@/store/offline'
+import { useCast } from '@/lib/cast'
 import { cn } from '@/lib/utils'
 import { formatDuration } from '@/lib/format'
 
@@ -23,6 +24,15 @@ export function MiniPlayer() {
   const toggleFavorite = useLibrary((s) => s.toggleFavorite)
   const isFavorite = useLibrary((s) => s.isFavorite)
   const showMiniArt = useSettings((s) => s.showMiniArt)
+  const castAvailable = useCast((s) => s.available)
+  const castConnected = useCast((s) => s.connected)
+  const castTrackId = useCast((s) => s.trackId)
+  const castCurrent = usePlayer((s) => s.castCurrent)
+  const stopCast = useCast((s) => s.actions.stopCast)
+  const downloaded = useOffline((s) => s.isDownloaded(current?.id ?? ''))
+  const downloading = useOffline((s) => s.isDownloading(current?.id ?? ''))
+  const dlProgress = useOffline((s) => (current ? s.progress[current.id] : undefined))
+  const download = useOffline((s) => s.download)
 
   if (!current) return null
 
@@ -69,6 +79,44 @@ export function MiniPlayer() {
 
         {/* Controls */}
         <div className="flex items-center gap-0.5 sm:gap-1 shrink-0">
+          {castAvailable && (
+            <button
+              onClick={() => {
+                if (castConnected) stopCast()
+                else castCurrent()
+              }}
+              className={cn(
+                'inline-flex rounded-full p-2 hover:bg-accent',
+                castConnected && castTrackId === current.id && 'text-primary'
+              )}
+              aria-label={castConnected ? 'Disconnect cast' : 'Cast to device'}
+              title={castConnected ? 'Disconnect cast' : 'Cast to device'}
+            >
+              <Cast className="h-4 w-4" />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (!downloading && !downloaded) download(current, current.source === 'au' ? 'au' : 'yt')
+            }}
+            className="inline-flex rounded-full p-2 hover:bg-accent"
+            aria-label={downloaded ? 'Downloaded for offline' : 'Download for offline'}
+            title={
+              downloaded
+                ? 'Available offline'
+                : downloading
+                  ? `Downloading ${dlProgress?.total ? Math.round(((dlProgress.loaded || 0) / dlProgress.total) * 100) : 0}%`
+                  : 'Download for offline'
+            }
+          >
+            {downloading ? (
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            ) : downloaded ? (
+              <Download className="h-4 w-4 text-primary fill-current" />
+            ) : (
+              <Download className="h-4 w-4" />
+            )}
+          </button>
           <button
             onClick={prev}
             className="hidden xs:inline-flex rounded-full p-2 hover:bg-accent"
@@ -98,6 +146,9 @@ export function MiniPlayer() {
 
         {/* Desktop extras */}
         <div className="hidden md:flex items-center gap-1 shrink-0">
+          {castConnected && (
+            <span className="text-[10px] font-medium uppercase tracking-wide text-primary">Casting</span>
+          )}
           <button
             onClick={() => toggleFavorite(current)}
             className="rounded-full p-2 hover:bg-accent"

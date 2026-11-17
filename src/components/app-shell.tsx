@@ -13,6 +13,8 @@ import { SettingsView } from '@/views/settings-view'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
 import { useSettings, applyAccent } from '@/store/settings'
+import { useOffline } from '@/store/offline'
+import { useCast } from '@/lib/cast'
 import { cn } from '@/lib/utils'
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
@@ -58,6 +60,12 @@ export function AppShell() {
   useEffect(() => {
     initPlayer()
   }, [initPlayer])
+
+  // Hydrate offline registry + cast framework once
+  useEffect(() => {
+    useOffline.getState().hydrate()
+    useCast.getState().actions.init()
+  }, [])
 
   // Apply accent color
   useEffect(() => {
@@ -110,7 +118,7 @@ export function AppShell() {
           </button>
           <div className="mt-auto px-2 text-[11px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground/80">Built on free APIs</p>
-            <p>Piped • LRCLIB • iTunes • YouTube embed</p>
+            <p>Piped • Audius • LRCLIB • iTunes • YouTube embed</p>
           </div>
         </aside>
 
@@ -142,8 +150,8 @@ export function AppShell() {
 
           {/* Footer note (desktop) */}
           <footer className="mt-auto hidden md:block border-t px-6 py-3 text-center text-[11px] text-muted-foreground">
-            Dhun — a free PWA music platform. Metadata by Piped, lyrics by LRCLIB, artwork by iTunes,
-            playback via YouTube&apos;s official embedded player. No ads. No tracking.
+            Dhun — a free PWA music platform. Metadata by Piped, indie catalog by Audius, lyrics by LRCLIB,
+            artwork by iTunes, playback via YouTube&apos;s official embedded player. No ads. No tracking.
           </footer>
         </div>
 

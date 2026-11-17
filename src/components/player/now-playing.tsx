@@ -17,6 +17,8 @@ import {
   SkipForward,
   Timer,
   AudioWaveform,
+  Cast,
+  Download,
 } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Slider } from '@/components/ui/slider'
@@ -35,6 +37,8 @@ import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
+import { useOffline } from '@/store/offline'
+import { useCast } from '@/lib/cast'
 import { formatDuration } from '@/lib/format'
 import { hifiEngine } from '@/engine/hifi'
 import { cn } from '@/lib/utils'
@@ -178,8 +182,23 @@ export function NowPlaying() {
   const toggleFavorite = useLibrary((s) => s.toggleFavorite)
   const isFavorite = useLibrary((s) => s.isFavorite)
   const region = useSettings((s) => s.region)
+  const castAvailable = useCast((s) => s.available)
+  const castConnected = useCast((s) => s.connected)
+  const castTrackId = useCast((s) => s.trackId)
+  const castPosition = useCast((s) => s.position)
+  const castDuration = useCast((s) => s.duration)
+  const castCurrent = usePlayer((s) => s.castCurrent)
+  const stopCast = useCast((s) => s.actions.stopCast)
+  const downloaded = useOffline((s) => s.isDownloaded(current?.id ?? ''))
+  const downloading = useOffline((s) => s.isDownloading(current?.id ?? ''))
+  const dlProgress = useOffline((s) => (current ? s.progress[current.id] : undefined))
+  const download = useOffline((s) => s.download)
 
   if (!current) return null
+
+  const casting = castConnected && castTrackId === current.id
+  const shownPosition = casting ? castPosition : position
+  const shownDuration = casting ? castDuration || duration : duration
 
   const art = hiResArt || current.artwork
   const fav = isFavorite(current.id)
@@ -200,7 +219,10 @@ export function NowPlaying() {
               <span className="text-[11px] uppercase tracking-widest text-muted-foreground">Now Playing</span>
               <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                 <AudioWaveform className="h-3 w-3" />
-                {hifiActive ? 'Hi-Fi direct stream' : 'Stable mode'}
+                {casting ? 'Casting' : hifiActive ? 'Hi-Fi direct stream' : 'Stable mode'}
+                {current.source === 'au' && (
+                  <span className="rounded-full bg-primary/15 text-primary px-1.5 font-semibold">Audius</span>
+                )}
                 {hiResArt && ' • HD art'}
               </span>
             </div>
@@ -232,6 +254,35 @@ export function NowPlaying() {
               <p className="mt-0.5 truncate text-sm text-muted-foreground">{current.artist}</p>
             </div>
             <button
+              onClick={() => {
+                if (!downloading && !downloaded) download(current, current.source === 'au' ? 'au' : 'yt')
+              }}
+              className="rounded-full p-2 hover:bg-accent shrink-0"
+              aria-label={downloaded ? 'Downloaded for offline' : 'Download for offline'}
+              title={downloaded ? 'Available offline' : 'Download for offline'}
+            >
+              {downloading ? (
+                <Loader2 className="h-5 w-5 animate-spin text-primary" />
+              ) : downloaded ? (
+                <Download className="h-5 w-5 text-primary fill-current" />
+              ) : (
+                <Download className="h-5 w-5" />
+              )}
+            </button>
+            {castAvailable && (
+              <button
+                onClick={() => {
+                  if (casting) stopCast()
+                  else castCurrent()
+                }}
+                className={cn('rounded-full p-2 hover:bg-accent shrink-0', casting && 'text-primary')}
+                aria-label={casting ? 'Disconnect cast' : 'Cast to device'}
+                title={casting ? 'Disconnect cast' : 'Cast to device'}
+              >
+                <Cast className="h-5 w-5" />
+              </button>
+            )}
+            <button
               onClick={() => toggleFavorite(current)}
               className="rounded-full p-2 hover:bg-accent shrink-0"
               aria-label="Toggle favorite"
@@ -243,15 +294,15 @@ export function NowPlaying() {
           {/* seek */}
           <div className="mt-4 px-6">
             <Slider
-              value={[Math.min(position, duration || 1)]}
-              max={Math.max(duration, 1)}
+              value={[Math.min(shownPosition, shownDuration || 1)]}
+              max={Math.max(shownDuration, 1)}
               step={1}
               onValueChange={(v) => seek(v[0])}
               aria-label="Seek position"
             />
             <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground tabular-nums">
-              <span>{formatDuration(position)}</span>
-              <span>{formatDuration(duration)}</span>
+              <span>{formatDuration(shownPosition)}</span>
+              <span>{formatDuration(shownDuration)}</span>
             </div>
           </div>
 

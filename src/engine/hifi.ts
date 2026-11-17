@@ -61,6 +61,7 @@ class HifiEngine {
   private analyser: AnalyserNode | null = null
   private events: EngineEvents = {}
   private volume = 100
+  private srcToken = 0 // guards stale loadedmetadata one-shots across src swaps
   public active = false // true when this engine currently drives playback
 
   setEvents(e: EngineEvents) {
@@ -124,6 +125,14 @@ class HifiEngine {
     if (!fetched.ok || !fetched.streams?.length) return false
     const stream = pickStream(fetched.streams, opts?.maxBitrate)
     if (!stream?.url) return false
+    return this.playUrl(stream.url)
+  }
+
+  /**
+   * Play a concrete audio URL — same pipeline as play() minus stream resolution.
+   * Used for offline-cached tracks (/api/audio/<id>) and any direct stream URL.
+   */
+  async playUrl(url: string, startSeconds = 0): Promise<boolean> {
     const audio = this.ensureAudio()
     this.ensureGraph()
     if (this.ctx?.state === 'suspended') {
@@ -131,9 +140,23 @@ class HifiEngine {
         await this.ctx.resume()
       } catch {}
     }
-    audio.src = stream.url
+    const token = ++this.srcToken
+    audio.src = url
     audio.volume = 1
     this.active = true
+    if (startSeconds > 0) {
+      // currentTime is only seekable once metadata for the new src is loaded.
+      audio.addEventListener(
+        'loadedmetadata',
+        () => {
+          if (token !== this.srcToken) return // a newer playUrl superseded this one
+          try {
+            audio.currentTime = startSeconds
+          } catch {}
+        },
+        { once: true }
+      )
+    }
     try {
       await audio.play()
       return true

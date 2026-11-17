@@ -1,13 +1,19 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { getOrCreateUser } from '@/lib/user'
 import type { LibraryTrack } from '@/lib/types'
 
 export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
 
-// GET → favorites ordered by addedAt desc
+// GET → current user's favorites ordered by addedAt desc
 export async function GET() {
   try {
-    const rows = await db.favorite.findMany({ orderBy: { addedAt: 'desc' } })
+    const user = await getOrCreateUser()
+    const rows = await db.favorite.findMany({
+      where: { userId: user.id },
+      orderBy: { addedAt: 'desc' },
+    })
     const items: LibraryTrack[] = rows.map((r) => ({
       id: r.id,
       trackId: r.trackId,
@@ -16,6 +22,7 @@ export async function GET() {
       artwork: r.artwork,
       duration: r.duration,
       addedAt: r.addedAt.toISOString(),
+      source: r.source as LibraryTrack['source'],
     }))
     return NextResponse.json({ items })
   } catch (err) {
@@ -26,9 +33,10 @@ export async function GET() {
   }
 }
 
-// POST → upsert favorite by trackId
+// POST → upsert favorite on the (source, trackId) unique — re-adding refreshes metadata
 export async function POST(req: NextRequest) {
   try {
+    const user = await getOrCreateUser()
     const body = (await req.json()) as {
       id?: string
       trackId?: string
@@ -36,28 +44,25 @@ export async function POST(req: NextRequest) {
       artist?: string
       artwork?: string | null
       duration?: number
+      source?: string
     }
     const trackId = body.id ?? body.trackId
     const title = body.title
     const artist = body.artist
+    const source = body.source ?? 'yt'
     if (!trackId || !title || !artist) {
       return NextResponse.json({ error: 'id, title and artist are required' }, { status: 400 })
     }
+    const data = {
+      title,
+      artist,
+      artwork: body.artwork ?? null,
+      duration: typeof body.duration === 'number' ? body.duration : 0,
+    }
     await db.favorite.upsert({
-      where: { trackId },
-      update: {
-        title,
-        artist,
-        artwork: body.artwork ?? null,
-        duration: typeof body.duration === 'number' ? body.duration : 0,
-      },
-      create: {
-        trackId,
-        title,
-        artist,
-        artwork: body.artwork ?? null,
-        duration: typeof body.duration === 'number' ? body.duration : 0,
-      },
+      where: { source_trackId: { source, trackId } },
+      update: data,
+      create: { userId: user.id, source, trackId, ...data },
     })
     return NextResponse.json({ ok: true })
   } catch (err) {
@@ -68,14 +73,16 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE ?trackId= → remove favorite(s)
+// DELETE ?trackId=&source= → remove favorite(s) of the current user
 export async function DELETE(req: NextRequest) {
   try {
+    const user = await getOrCreateUser()
     const trackId = req.nextUrl.searchParams.get('trackId')
     if (!trackId) {
       return NextResponse.json({ error: 'Missing "trackId" parameter' }, { status: 400 })
     }
-    await db.favorite.deleteMany({ where: { trackId } })
+    const source = req.nextUrl.searchParams.get('source') ?? 'yt'
+    await db.favorite.deleteMany({ where: { userId: user.id, source, trackId } })
     return NextResponse.json({ ok: true })
   } catch (err) {
     return NextResponse.json(

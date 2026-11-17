@@ -1,6 +1,8 @@
 // Shared types for Dhun music platform — DO NOT MODIFY without coordinating both frontend & backend
+export type TrackSource = 'yt' | 'au' // yt = YouTube (Piped), au = Audius
+
 export interface MusicItem {
-  id: string // YouTube videoId
+  id: string // YouTube videoId (source='yt') or Audius track id (source='au')
   title: string
   artist: string // channel / artist name
   artwork: string // thumbnail url
@@ -9,6 +11,7 @@ export interface MusicItem {
   album?: string
   year?: string
   genre?: string
+  source?: TrackSource // absent = legacy 'yt'
 }
 
 export type SearchFilter = 'music_songs' | 'videos' | 'albums' | 'artists' | 'playlists'
@@ -73,6 +76,7 @@ export interface PlaylistItemData {
   artwork: string | null
   duration: number
   position: number
+  source?: TrackSource // absent = legacy 'yt'
 }
 
 export interface PlaylistDetail extends PlaylistSummary {
@@ -81,13 +85,14 @@ export interface PlaylistDetail extends PlaylistSummary {
 
 export interface LibraryTrack {
   id: string // internal row id
-  trackId: string // youtube videoId
+  trackId: string // youtube videoId (or Audius track id)
   title: string
   artist: string
   artwork: string | null
   duration: number
   addedAt?: string
   playedAt?: string
+  source?: TrackSource // absent = legacy 'yt'
 }
 
 // localStorage-persisted queue item

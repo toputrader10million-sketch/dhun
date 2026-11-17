@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, ListMusic, Loader2, Search, Users, Disc3, Library } from 'lucide-react'
+import { ArrowLeft, ListMusic, Loader2, Search, Users, Disc3, Library, Youtube, AudioWaveform } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TrackRow, TrackImage } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -10,6 +10,8 @@ import { SEARCH_FILTERS } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { cn } from '@/lib/utils'
+
+type TrackSource = 'yt' | 'au'
 
 const FILTER_LABELS: Record<SearchFilter, string> = {
   music_songs: 'Songs',
@@ -28,6 +30,7 @@ type DetailState = {
 export function ExploreView() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<SearchFilter>('music_songs')
+  const [source, setSource] = useState<TrackSource>('yt')
   const [results, setResults] = useState<SearchResponse | null>(null)
   const [loading, setLoading] = useState(false)
   const [suggestions, setSuggestions] = useState<string[]>([])
@@ -40,24 +43,33 @@ export function ExploreView() {
   const playItem = usePlayer((s) => s.playItem)
 
   const runSearch = useCallback(
-    (q: string, f: SearchFilter, page?: string) => {
+    (q: string, f: SearchFilter, page?: string, src: TrackSource = source) => {
       if (!q.trim()) return
       setLoading(true)
       setShowSuggestions(false)
-      const url = `/api/search?q=${encodeURIComponent(q)}&filter=${f}${page ? `&page=${encodeURIComponent(page)}` : ''}`
+      const url =
+        src === 'au'
+          ? `/api/audius/search?q=${encodeURIComponent(q)}`
+          : `/api/search?q=${encodeURIComponent(q)}&filter=${f}${page ? `&page=${encodeURIComponent(page)}` : ''}`
       fetch(url)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((d: SearchResponse) => {
+          const items = (d.items || []).map((it: MusicItem) => ({
+            ...it,
+            source: src === 'au' ? ('au' as const) : it.source,
+          }))
           setResults((prev) =>
-            page && prev && prev.filter === f ? { ...d, items: [...prev.items, ...d.items] } : d
+            page && prev && prev.filter === f
+              ? { ...d, items: [...prev.items, ...items] }
+              : { ...d, items, filter: src === 'au' ? ('music_songs' as const) : f }
           )
         })
         .catch(() => {
-          setResults({ items: [], filter: f })
+          setResults({ items: [], filter: src === 'au' ? 'music_songs' : f })
         })
         .finally(() => setLoading(false))
     },
-    []
+    [source]
   )
 
   // Debounced live search
@@ -72,10 +84,10 @@ export function ExploreView() {
     return () => clearTimeout(t)
   }, [query, filter, runSearch])
 
-  // Suggestions
+  // Suggestions (YouTube only — Audius has no suggest endpoint)
   useEffect(() => {
     const q = query.trim()
-    if (q.length < 2 || !showSuggestions) return
+    if (q.length < 2 || !showSuggestions || source === 'au') return
     const t = setTimeout(() => {
       fetch(`/api/suggestions?q=${encodeURIComponent(q)}`)
         .then((r) => (r.ok ? r.json() : null))
@@ -88,12 +100,13 @@ export function ExploreView() {
   // External seed (e.g., from artist click)
   useEffect(() => {
     if (searchSeed) {
+      setSource('yt')
       setQuery(searchSeed)
-      runSearch(searchSeed, filter)
+      runSearch(searchSeed, 'music_songs', undefined, 'yt')
       clearSearchSeed()
       inputRef.current?.focus()
     }
-  }, [searchSeed, filter, runSearch, clearSearchSeed])
+  }, [searchSeed, runSearch, clearSearchSeed])
 
   const openDetail = async (item: MusicItem) => {
     if (filter === 'artists') {
@@ -101,6 +114,7 @@ export function ExploreView() {
       runSearch(item.artist || item.title, 'music_songs')
       return
     }
+    if (source === 'au') return
     setDetailLoading(true)
     setDetail(null)
     try {
@@ -135,7 +149,7 @@ export function ExploreView() {
               runSearch(query.trim(), filter)
             }
           }}
-          placeholder="Search songs, artists, albums…"
+          placeholder={source === 'au' ? 'Search Audius (indie artists)…' : 'Search songs, artists, albums…'}
           className="pl-10 h-11 rounded-xl bg-accent/50 border-0"
           aria-label="Search music"
         />
@@ -179,24 +193,64 @@ export function ExploreView() {
         </>
       ) : (
         <>
-          {/* filter chips */}
-          <div className="mb-4 flex gap-2 overflow-x-auto dhun-scroll pb-1">
-            {SEARCH_FILTERS.map((f) => (
+          {/* source toggle: YouTube ↔ Audius */}
+          <div className="mb-3 flex items-center gap-2">
+            <div className="inline-flex rounded-full border p-0.5 bg-accent/40">
               <button
-                key={f}
-                onClick={() => setFilter(f)}
+                onClick={() => {
+                  setSource('yt')
+                  if (query.trim().length >= 2) runSearch(query.trim(), filter, undefined, 'yt')
+                }}
                 className={cn(
-                  'shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
-                  filter === f ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors inline-flex items-center gap-1.5',
+                  source === 'yt' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
                 )}
+                aria-pressed={source === 'yt'}
               >
-                {f === 'albums' && <Disc3 className="mr-1 inline h-3 w-3" />}
-                {f === 'artists' && <Users className="mr-1 inline h-3 w-3" />}
-                {f === 'playlists' && <Library className="mr-1 inline h-3 w-3" />}
-                {FILTER_LABELS[f]}
+                <Youtube className="h-3.5 w-3.5" /> YouTube
               </button>
-            ))}
+              <button
+                onClick={() => {
+                  setSource('au')
+                  setResults(null)
+                  if (query.trim().length >= 2) runSearch(query.trim(), filter, undefined, 'au')
+                }}
+                className={cn(
+                  'rounded-full px-3 py-1 text-xs font-medium transition-colors inline-flex items-center gap-1.5',
+                  source === 'au' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'
+                )}
+                aria-pressed={source === 'au'}
+              >
+                <AudioWaveform className="h-3.5 w-3.5" /> Audius
+              </button>
+            </div>
+            {source === 'au' && (
+              <p className="text-[11px] text-muted-foreground">
+                Independent artists — streams directly, no YouTube needed.
+              </p>
+            )}
           </div>
+
+          {/* filter chips (YouTube only) */}
+          {source === 'yt' && (
+            <div className="mb-4 flex gap-2 overflow-x-auto dhun-scroll pb-1">
+              {SEARCH_FILTERS.map((f) => (
+                <button
+                  key={f}
+                  onClick={() => setFilter(f)}
+                  className={cn(
+                    'shrink-0 rounded-full px-3.5 py-1.5 text-sm font-medium transition-colors',
+                    filter === f ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
+                  )}
+                >
+                  {f === 'albums' && <Disc3 className="mr-1 inline h-3 w-3" />}
+                  {f === 'artists' && <Users className="mr-1 inline h-3 w-3" />}
+                  {f === 'playlists' && <Library className="mr-1 inline h-3 w-3" />}
+                  {FILTER_LABELS[f]}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* results */}
           {loading && !results && (
@@ -217,7 +271,7 @@ export function ExploreView() {
             </div>
           )}
 
-          {(filter === 'music_songs' || filter === 'videos') &&
+          {(source === 'au' || filter === 'music_songs' || filter === 'videos') &&
             results?.items.map((item, i) => (
               <TrackRow
                 key={`${item.id}-${i}`}
@@ -228,7 +282,7 @@ export function ExploreView() {
               />
             ))}
 
-          {(filter === 'albums' || filter === 'artists' || filter === 'playlists') && (
+          {source === 'yt' && (filter === 'albums' || filter === 'artists' || filter === 'playlists') && (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {results?.items.map((item, i) => (
                 <button
@@ -244,7 +298,7 @@ export function ExploreView() {
             </div>
           )}
 
-          {results?.nextPage && !loading && (
+          {source === 'yt' && results?.nextPage && !loading && (
             <div className="mt-4 flex justify-center">
               <Button
                 variant="outline"

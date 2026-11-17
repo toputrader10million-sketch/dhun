@@ -1,7 +1,7 @@
 'use client'
 import Image from 'next/image'
 import { memo } from 'react'
-import { Heart, ListPlus, Play, Plus, Radio, Trash2, MoreVertical, ListMusic } from 'lucide-react'
+import { Heart, ListPlus, Play, Plus, Radio, Trash2, MoreVertical, ListMusic, Download } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,6 +16,7 @@ import { formatDuration, formatViews } from '@/lib/format'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
+import { useOffline } from '@/store/offline'
 import { cn } from '@/lib/utils'
 
 export function TrackImage({
@@ -66,6 +67,10 @@ export const TrackRow = memo(function TrackRow({
   const isPlaying = usePlayer((s) => s.isPlaying)
   const isCurrent = currentId === item.id
   const { isFavorite, toggleFavorite, playlists, addToPlaylist, createPlaylist } = useLibrary()
+  const downloaded = useOffline((s) => s.isDownloaded(item.id))
+  const downloading = useOffline((s) => s.isDownloading(item.id))
+  const downloadOffline = useOffline((s) => s.download)
+  const removeOffline = useOffline((s) => s.remove)
 
   const fav = isFavorite(item.id)
 
@@ -148,6 +153,15 @@ export const TrackRow = memo(function TrackRow({
             <DropdownMenuItem onClick={() => toggleFavorite(item)}>
               <Heart className={cn('mr-2 h-4 w-4', fav && 'fill-current text-primary')} />
               {fav ? 'Remove favorite' : 'Save to favorites'}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                if (downloaded) removeOffline(item.id)
+                else downloadOffline(item, item.source === 'au' ? 'au' : 'yt')
+              }}
+            >
+              <Download className={cn('mr-2 h-4 w-4', downloaded && 'text-primary fill-current')} />
+              {downloading ? 'Downloading…' : downloaded ? 'Remove offline download' : 'Download for offline'}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuSub>

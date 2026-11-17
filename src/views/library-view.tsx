@@ -9,6 +9,8 @@ import {
   Music4,
   Plus,
   Trash2,
+  Download,
+  HardDrive,
 } from 'lucide-react'
 import { TrackRow, TrackImage } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -36,11 +38,18 @@ import {
 import type { MusicItem, PlaylistDetail } from '@/lib/types'
 import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
+import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
 
 export function LibraryView() {
   const { favorites, history, playlists, loadAll, clearHistory, deletePlaylist } = useLibrary()
   const playItem = usePlayer((s) => s.playItem)
+  const offlineItems = useOffline((s) => s.items)
+  const offlineProgress = useOffline((s) => s.progress)
+  const offlineHydrated = useOffline((s) => s.hydrated)
+  const offlineRemove = useOffline((s) => s.remove)
+  const offlineClear = useOffline((s) => s.clearAll)
+  const offlineTotal = useOffline((s) => s.totalSize())
   const [openPlaylist, setOpenPlaylist] = useState<PlaylistDetail | null>(null)
   const [playlistLoading, setPlaylistLoading] = useState(false)
   const [createOpen, setCreateOpen] = useState(false)
@@ -52,6 +61,7 @@ export function LibraryView() {
 
   useEffect(() => {
     loadAll()
+    useOffline.getState().hydrate()
   }, [loadAll])
 
   const favoriteItems: MusicItem[] = favorites.map((f) => ({
@@ -60,6 +70,7 @@ export function LibraryView() {
     artist: f.artist,
     artwork: f.artwork || '',
     duration: f.duration,
+    source: f.source,
   }))
   const historyItems: MusicItem[] = history.map((h) => ({
     id: h.trackId,
@@ -67,6 +78,7 @@ export function LibraryView() {
     artist: h.artist,
     artwork: h.artwork || '',
     duration: h.duration,
+    source: h.source,
   }))
 
   const showDetail = async (id: string) => {
@@ -121,6 +133,7 @@ export function LibraryView() {
               artist: it.artist,
               artwork: it.artwork || '',
               duration: it.duration,
+              source: it.source,
             }
             return (
               <TrackRow
@@ -154,7 +167,7 @@ export function LibraryView() {
     <div className="px-4 sm:px-6 py-4">
       <h1 className="text-2xl font-extrabold tracking-tight mb-4">Your Library</h1>
       <Tabs defaultValue="favorites" className="w-full">
-        <TabsList className="grid w-full max-w-md grid-cols-3">
+        <TabsList className="grid w-full max-w-lg grid-cols-4">
           <TabsTrigger value="favorites" className="gap-1.5">
             <Heart className="h-3.5 w-3.5" /> Favorites
             {favorites.length > 0 && <span className="text-[10px] opacity-70">({favorites.length})</span>}
@@ -164,6 +177,10 @@ export function LibraryView() {
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
             <History className="h-3.5 w-3.5" /> History
+          </TabsTrigger>
+          <TabsTrigger value="offline" className="gap-1.5">
+            <Download className="h-3.5 w-3.5" /> Offline
+            {offlineItems.length > 0 && <span className="text-[10px] opacity-70">({offlineItems.length})</span>}
           </TabsTrigger>
         </TabsList>
 
@@ -307,6 +324,93 @@ export function LibraryView() {
             historyItems.map((item, i) => (
               <TrackRow key={`${item.id}-${i}`} item={item} context={historyItems} />
             ))
+          )}
+        </TabsContent>
+
+        {/* Offline downloads */}
+        <TabsContent value="offline" className="mt-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <HardDrive className="h-3.5 w-3.5" />
+              {offlineItems.length} saved
+              {offlineTotal > 0 && ` • ${(offlineTotal / (1024 * 1024)).toFixed(1)} MB on device`}
+            </p>
+            {offlineItems.length > 0 && (
+              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => offlineClear()}>
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Clear all
+              </Button>
+            )}
+          </div>
+          {!offlineHydrated ? (
+            <div className="space-y-2">
+              {[...Array(4)].map((_, i) => (
+                <Skeleton key={i} className="h-14 rounded-xl" />
+              ))}
+            </div>
+          ) : offlineItems.length === 0 ? (
+            <div className="rounded-xl bg-accent/40 p-8 text-center">
+              <Download className="mx-auto h-6 w-6 text-primary mb-2" />
+              <p className="font-medium">No offline downloads</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Use the ⋮ menu on any song → “Download for offline”. Saved songs play even without internet.
+              </p>
+            </div>
+          ) : (
+            offlineItems.map((t) => {
+              const item: MusicItem = {
+                id: t.trackId,
+                title: t.title,
+                artist: t.artist,
+                artwork: t.artwork || '',
+                duration: t.duration,
+                source: t.source,
+              }
+              const prog = offlineProgress[t.trackId]
+              return (
+                <div
+                  key={t.trackId}
+                  className="group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-accent/60 cursor-pointer"
+                  onClick={() => playItem(item)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault()
+                      playItem(item)
+                    }
+                  }}
+                  aria-label={`Play offline ${t.title}`}
+                >
+                  <TrackImage item={item} className="h-11 w-11" rounded="rounded-md" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{t.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {t.artist}
+                      {t.size > 0 && ` • ${(t.size / (1024 * 1024)).toFixed(1)} MB`}
+                      {` • ${t.source === 'au' ? 'Audius' : 'YouTube'}`}
+                    </p>
+                  </div>
+                  {prog && (
+                    <span className="text-xs text-primary tabular-nums shrink-0">
+                      {prog.total ? Math.round((prog.loaded / prog.total) * 100) : '…'}%
+                    </span>
+                  )}
+                  <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:block">
+                    {formatDuration(t.duration)}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      offlineRemove(t.trackId)
+                    }}
+                    className="rounded-full p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent shrink-0"
+                    aria-label={`Remove offline download ${t.title}`}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </div>
+              )
+            })
           )}
         </TabsContent>
       </Tabs>

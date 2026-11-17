@@ -30,6 +30,7 @@ interface SettingsState {
   eqPreset: EqPreset
   eqGains: number[]
   autoplayRadio: boolean
+  autoOfflineFavorites: boolean
   maxBitrate: number // 0 = no cap
   showMiniArt: boolean
   setAccent: (a: AccentColor) => void
@@ -39,6 +40,7 @@ interface SettingsState {
   setEqPreset: (p: EqPreset) => void
   setEqGain: (index: number, value: number) => void
   setAutoplayRadio: (v: boolean) => void
+  setAutoOfflineFavorites: (v: boolean) => void
   setMaxBitrate: (v: number) => void
   setShowMiniArt: (v: boolean) => void
 }
@@ -53,6 +55,7 @@ export const useSettings = create<SettingsState>()(
       eqPreset: 'flat',
       eqGains: EQ_PRESETS.flat,
       autoplayRadio: true,
+      autoOfflineFavorites: false,
       maxBitrate: 0,
       showMiniArt: true,
       setAccent: (accent) => set({ accent }),
@@ -68,6 +71,7 @@ export const useSettings = create<SettingsState>()(
           return { eqPreset: 'custom', eqGains: gains }
         }),
       setAutoplayRadio: (autoplayRadio) => set({ autoplayRadio }),
+      setAutoOfflineFavorites: (autoOfflineFavorites) => set({ autoOfflineFavorites }),
       setMaxBitrate: (maxBitrate) => set({ maxBitrate }),
       setShowMiniArt: (showMiniArt) => set({ showMiniArt }),
     }),

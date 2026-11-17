@@ -12,6 +12,9 @@ import {
   setMediaPlaybackState,
 } from '@/engine/media-session'
 import { useSettings } from './settings'
+import { useOffline } from './offline'
+import { audioUrlFor } from '@/lib/offline'
+import { useCast } from '@/lib/cast'
 
 export type RepeatMode = 'off' | 'all' | 'one'
 
@@ -43,6 +46,7 @@ interface PlayerState {
   toggleShuffle: () => void
   cycleRepeat: () => void
   startRadio: () => Promise<void>
+  castCurrent: () => Promise<boolean>
 }
 
 function toQueued(item: MusicItem): QueuedTrack {
@@ -66,21 +70,102 @@ export const usePlayer = create<PlayerState>()(
     (set, get) => {
       const current = () => get().queue[get().index] ?? null
 
+      function sideEffects(item: MusicItem) {
+        // Fire-and-forget: hi-res artwork upgrade + history record (safe offline)
+        if (item.source !== 'au') {
+          fetch(`/api/artwork?title=${encodeURIComponent(item.title)}&artist=${encodeURIComponent(item.artist)}`)
+            .then((r) => (r.ok ? r.json() : null))
+            .then((d) => {
+              if (d?.url && current()?.id === item.id) set({ hiResArt: d.url })
+            })
+            .catch(() => {})
+        }
+        fetch('/api/history', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: item.id,
+            title: item.title,
+            artist: item.artist,
+            artwork: item.artwork,
+            duration: item.duration,
+            source: item.source === 'au' ? 'au' : 'yt',
+          }),
+        }).catch(() => {})
+      }
+
+      function stopLocalEngines() {
+        hifiEngine.active = false
+        hifiEngine.stop()
+        youtubeEngine.stop()
+      }
+
       async function startPlayback(item: MusicItem, startSeconds = 0) {
         const mode = useSettings.getState().playbackMode
         set({ loadingTrackId: item.id, isBuffering: true, hiResArt: null, position: startSeconds })
         updateMediaMetadata(item)
         setMediaPlaybackState('paused')
 
+        // Casting: hand off to the receiver instead of local engines
+        if (useCast.getState().connected) {
+          const ok = await useCast
+            .getState()
+            .actions.castTrack(
+              { id: item.id, source: item.source, title: item.title, artist: item.artist, artwork: item.artwork },
+              audioUrlFor(item.id, item.source)
+            )
+          if (ok) {
+            stopLocalEngines()
+            set({ hifiActive: false, isBuffering: false, loadingTrackId: null, isPlaying: true })
+            setMediaPlaybackState('playing')
+            sideEffects(item)
+            return
+          }
+          toast.error('Could not cast — playing locally')
+        }
+
+        // 1) Cached offline copy → play from device (works without internet)
+        const offline = useOffline.getState()
+        if (offline.isDownloaded(item.id)) {
+          const url = offline.urlFor(item.id)
+          if (url) {
+            const ok = await hifiEngine.playUrl(url, startSeconds)
+            if (ok) {
+              set({ hifiActive: true, isBuffering: false, loadingTrackId: null })
+              sideEffects(item)
+              return
+            }
+          }
+        }
+
+        // 2) Audius tracks stream via our same-origin proxy (EQ-capable)
+        if (item.source === 'au') {
+          const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds)
+          if (ok) {
+            set({ hifiActive: true, isBuffering: false, loadingTrackId: null })
+            sideEffects(item)
+            return
+          }
+          stopLocalEngines()
+          set({ hifiActive: false, isBuffering: false, loadingTrackId: null, isPlaying: false })
+          setMediaPlaybackState('paused')
+          toast.error('Audius stream unavailable', { description: item.title.slice(0, 48) })
+          return
+        }
+
+        // 3) YouTube — Hi-Fi mode: same-origin proxy first, then direct stream
         let hifiOk = false
         if (mode === 'hifi') {
-          hifiOk = await hifiEngine.play(item.id, {
-            maxBitrate: useSettings.getState().maxBitrate,
-          })
+          hifiOk = await hifiEngine.playUrl(`/api/audio/${item.id}`, startSeconds)
           if (!hifiOk) {
-            toast.info('Direct stream unavailable — using stable mode', {
-              description: 'Switch to Hi-Fi mode later in Settings if instances recover.',
+            hifiOk = await hifiEngine.play(item.id, {
+              maxBitrate: useSettings.getState().maxBitrate,
             })
+            if (!hifiOk) {
+              toast.info('Direct stream unavailable — using stable mode', {
+                description: 'Switch to Hi-Fi mode later in Settings if instances recover.',
+              })
+            }
           }
         }
 
@@ -92,24 +177,7 @@ export const usePlayer = create<PlayerState>()(
         }
 
         set({ hifiActive: hifiOk, isBuffering: false, loadingTrackId: null })
-        // Fire-and-forget: hi-res artwork upgrade + history record
-        fetch(`/api/artwork?title=${encodeURIComponent(item.title)}&artist=${encodeURIComponent(item.artist)}`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => {
-            if (d?.url && current()?.id === item.id) set({ hiResArt: d.url })
-          })
-          .catch(() => {})
-        fetch('/api/history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            id: item.id,
-            title: item.title,
-            artist: item.artist,
-            artwork: item.artwork,
-            duration: item.duration,
-          }),
-        }).catch(() => {})
+        sideEffects(item)
       }
 
       async function maybeRadioThenNext(auto: boolean) {
@@ -119,13 +187,17 @@ export const usePlayer = create<PlayerState>()(
           const cur = current()
           if (cur) {
             try {
+              // Audius tracks: radio = Audius trending pool
               const res = await fetch(
-                `/api/radio/${cur.id}?title=${encodeURIComponent(cur.title)}&artist=${encodeURIComponent(cur.artist)}`
+                cur.source === 'au'
+                  ? '/api/audius/trending'
+                  : `/api/radio/${cur.id}?title=${encodeURIComponent(cur.title)}&artist=${encodeURIComponent(cur.artist)}`
               )
               if (res.ok) {
                 const data = await res.json()
                 const items: MusicItem[] = (data.items || []).filter(
-                  (x: MusicItem) => !s.queue.some((q) => q.id === x.id)
+                  (x: MusicItem) =>
+                    !s.queue.some((q) => q.id === x.id && (q.source ?? 'yt') === (x.source ?? 'yt'))
                 )
                 if (items.length > 0) {
                   set({ queue: [...s.queue, ...items.map(toQueued)] })
@@ -247,6 +319,13 @@ export const usePlayer = create<PlayerState>()(
             onSeekTo: (sec) => get().seek(sec),
             onStop: () => get().togglePlay(),
           })
+          // Cast session lifecycle: when the receiver disconnects, stop local UI state
+          useCast.subscribe((cast, prev) => {
+            if (prev.connected && !cast.connected) {
+              set({ isPlaying: false, hifiActive: false })
+              setMediaPlaybackState('paused')
+            }
+          })
         },
 
         playItem: (item, context) => {
@@ -310,15 +389,43 @@ export const usePlayer = create<PlayerState>()(
         },
 
         clearQueue: () => {
+          if (useCast.getState().connected) useCast.getState().actions.stopCast()
           youtubeEngine.stop()
           hifiEngine.stop()
           set({ queue: [], index: -1, isPlaying: false, position: 0, duration: 0, hiResArt: null })
+        },
+
+        castCurrent: async () => {
+          const cur = current()
+          if (!cur) return false
+          const ok = await useCast
+            .getState()
+            .actions.castTrack(
+              { id: cur.id, source: cur.source, title: cur.title, artist: cur.artist, artwork: cur.artwork },
+              audioUrlFor(cur.id, cur.source)
+            )
+          if (ok) {
+            stopLocalEngines()
+            set({ hifiActive: false, isPlaying: true, isBuffering: false })
+            setMediaPlaybackState('playing')
+          } else {
+            toast.error('No cast device found', {
+              description: 'Chromecast and this device must be on the same Wi-Fi network.',
+            })
+          }
+          return ok
         },
 
         togglePlay: () => {
           const s = get()
           const cur = current()
           if (!cur) return
+          if (useCast.getState().connected && useCast.getState().trackId === cur.id) {
+            useCast.getState().actions.toggleRemote()
+            set({ isPlaying: useCast.getState().paused })
+            setMediaPlaybackState(useCast.getState().paused ? 'playing' : 'paused')
+            return
+          }
           if (s.isPlaying) {
             if (s.hifiActive) hifiEngine.pause()
             else youtubeEngine.pause()
@@ -367,7 +474,9 @@ export const usePlayer = create<PlayerState>()(
         },
 
         seek: (seconds) => {
-          if (get().hifiActive) hifiEngine.seek(seconds)
+          if (useCast.getState().connected) {
+            useCast.getState().actions.seekRemote(seconds)
+          } else if (get().hifiActive) hifiEngine.seek(seconds)
           else youtubeEngine.seek(seconds)
           set({ position: seconds })
           updateMediaPositionState(seconds, get().duration)
@@ -376,6 +485,10 @@ export const usePlayer = create<PlayerState>()(
         setVolume: (v) => {
           const vol = Math.max(0, Math.min(100, v))
           useSettings.getState().setVolume(vol)
+          if (useCast.getState().connected) {
+            useCast.getState().actions.setVolumeRemote(vol)
+            return
+          }
           youtubeEngine.setVolume(vol)
         },
 

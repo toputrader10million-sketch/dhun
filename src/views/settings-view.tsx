@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
   Download,
@@ -14,6 +14,12 @@ import {
   Trash2,
   Waves,
   Zap,
+  CloudUpload,
+  Copy,
+  Link2,
+  HardDrive,
+  Heart,
+  Save,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -21,12 +27,34 @@ import { Slider } from '@/components/ui/slider'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from '@/components/ui/dialog'
 import { toast } from 'sonner'
 import { useSettings, EQ_PRESETS, applyAccent, type AccentColor, type EqPreset } from '@/store/settings'
+import { useOffline } from '@/store/offline'
+import { useLibrary } from '@/store/library'
 import { triggerInstall } from '@/components/pwa/register-sw'
+import { useCast } from '@/lib/cast'
 import type { InstanceStatus } from '@/lib/types'
 import { EQ_FREQUENCIES } from '@/engine/hifi'
 import { cn } from '@/lib/utils'
+
+interface SyncUser {
+  id: string
+  code: string
+  name: string | null
+  createdAt: string
+}
+interface SyncInfo {
+  user: SyncUser
+  counts: { favorites: number; playlists: number; history: number }
+}
 
 const REGIONS = [
   { code: 'BD', label: 'Bangladesh' },
@@ -49,6 +77,18 @@ export function SettingsView() {
   const s = useSettings()
   const [instances, setInstances] = useState<InstanceStatus[] | null>(null)
   const [testing, setTesting] = useState(true)
+  // Cloud sync state
+  const [sync, setSync] = useState<SyncInfo | null>(null)
+  const [syncLoading, setSyncLoading] = useState(true)
+  const [deviceName, setDeviceName] = useState('')
+  const [linkCode, setLinkCode] = useState('')
+  const [linking, setLinking] = useState(false)
+  const importFileRef = useRef<HTMLInputElement>(null)
+  // Offline storage
+  const offlineItems = useOffline((st) => st.items)
+  const offlineTotal = useOffline((st) => st.totalSize())
+  const offlineClear = useOffline((st) => st.clearAll)
+  const castAvailable = useCast((st) => st.available)
 
   useEffect(() => {
     let alive = true
@@ -80,6 +120,22 @@ export function SettingsView() {
   useEffect(() => {
     applyAccent(s.accent)
   }, [s.accent])
+
+  const loadSync = () => {
+    setSyncLoading(true)
+    fetch('/api/sync/me')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((d: SyncInfo) => {
+        setSync(d)
+        setDeviceName(d.user.name || '')
+      })
+      .catch(() => setSync(null))
+      .finally(() => setSyncLoading(false))
+  }
+
+  useEffect(() => {
+    loadSync()
+  }, [])
 
   const clearCache = async () => {
     try {
@@ -259,6 +315,242 @@ export function SettingsView() {
         </p>
       </section>
 
+      {/* Cloud Sync */}
+      <section aria-label="Cloud sync" className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <CloudUpload className="h-4 w-4 text-primary" /> Cloud Sync
+          </h2>
+          {sync && (
+            <span className="rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-semibold px-2.5 py-1">
+              synced • Turso
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground mb-4">
+          Favorites, playlists এবং history ক্লাউডে (Turso) সেভ হয়। অন্য ডিভাইসে একই sync code দিলেই
+          পুরো লাইব্রেরি সেখানেও দেখা যাবে।
+        </p>
+        {syncLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Connecting…
+          </div>
+        ) : sync ? (
+          <div className="space-y-4">
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-xl border bg-accent/40 px-4 py-2">
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Sync code</p>
+                <p className="font-mono text-lg font-bold tracking-[0.2em] text-primary">{sync.user.code}</p>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full gap-1.5"
+                onClick={() => {
+                  navigator.clipboard
+                    .writeText(sync.user.code)
+                    .then(() => toast.success('Sync code copied'))
+                    .catch(() => toast.error('Copy failed'))
+                }}
+              >
+                <Copy className="h-3.5 w-3.5" /> Copy
+              </Button>
+              <Dialog>
+                <DialogTrigger asChild>
+                  <Button variant="outline" size="sm" className="rounded-full gap-1.5">
+                    <Link2 className="h-3.5 w-3.5" /> Link another device
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Link a device</DialogTitle>
+                  </DialogHeader>
+                  <p className="text-xs text-muted-foreground">
+                    অন্য ডিভাইসের Settings-এ দেখানো sync code লিখুন — সেই লাইব্রেরি এই ডিভাইসে চলে আসবে।
+                  </p>
+                  <Input
+                    value={linkCode}
+                    onChange={(e) => setLinkCode(e.target.value.toUpperCase())}
+                    placeholder="e.g. 8MHSU48S"
+                    className="font-mono tracking-widest"
+                    aria-label="Sync code"
+                  />
+                  <Button
+                    disabled={linking || linkCode.trim().length < 6}
+                    onClick={async () => {
+                      setLinking(true)
+                      try {
+                        const res = await fetch('/api/sync/link', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ code: linkCode.trim() }),
+                        })
+                        if (!res.ok) throw new Error()
+                        toast.success('Device linked — loading library…')
+                        setLinkCode('')
+                        loadSync()
+                        useLibrary.getState().loadAll()
+                      } catch {
+                        toast.error('Invalid sync code')
+                      } finally {
+                        setLinking(false)
+                      }
+                    }}
+                  >
+                    {linking ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null} Link this device
+                  </Button>
+                </DialogContent>
+              </Dialog>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 max-w-sm">
+              {[
+                { label: 'Favorites', value: sync.counts.favorites, icon: Heart },
+                { label: 'Playlists', value: sync.counts.playlists, icon: Save },
+                { label: 'History', value: sync.counts.history, icon: RadioTower },
+              ].map((c) => (
+                <div key={c.label} className="rounded-xl border p-3 text-center">
+                  <c.icon className="mx-auto h-3.5 w-3.5 text-muted-foreground mb-1" />
+                  <p className="text-lg font-bold leading-none">{c.value}</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">{c.label}</p>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <Input
+                value={deviceName}
+                onChange={(e) => setDeviceName(e.target.value)}
+                placeholder="Device name (e.g. My Phone)"
+                className="max-w-56 h-9"
+                aria-label="Device name"
+              />
+              <Button
+                variant="secondary"
+                size="sm"
+                className="rounded-full"
+                onClick={async () => {
+                  await fetch('/api/sync/me', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: deviceName.trim() }),
+                  })
+                  toast.success('Device name saved')
+                  loadSync()
+                }}
+              >
+                Save name
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={async () => {
+                  try {
+                    const res = await fetch('/api/sync/data')
+                    if (!res.ok) throw new Error()
+                    const blob = await res.blob()
+                    const a = document.createElement('a')
+                    a.href = URL.createObjectURL(blob)
+                    a.download = `dhun-backup-${new Date().toISOString().slice(0, 10)}.json`
+                    a.click()
+                    URL.revokeObjectURL(a.href)
+                    toast.success('Backup downloaded')
+                  } catch {
+                    toast.error('Export failed')
+                  }
+                }}
+              >
+                Export backup
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="rounded-full"
+                onClick={() => importFileRef.current?.click()}
+              >
+                Import backup
+              </Button>
+              <input
+                ref={importFileRef}
+                type="file"
+                accept="application/json"
+                className="hidden"
+                onChange={async (e) => {
+                  const file = e.target.files?.[0]
+                  if (!file) return
+                  try {
+                    const text = await file.text()
+                    const res = await fetch('/api/sync/data', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: text,
+                    })
+                    const d = await res.json()
+                    if (!res.ok) throw new Error()
+                    toast.success(
+                      `Imported: ${d?.imported?.favorites ?? 0} favorites, ${d?.imported?.playlists ?? 0} playlists`
+                    )
+                    useLibrary.getState().loadAll()
+                    loadSync()
+                  } catch {
+                    toast.error('Import failed — invalid backup file')
+                  } finally {
+                    e.target.value = ''
+                  }
+                }}
+              />
+            </div>
+          </div>
+        ) : (
+          <div className="rounded-xl bg-destructive/10 p-3 text-sm">
+            Could not reach the sync service — library stays on this device until it recovers.
+          </div>
+        )}
+      </section>
+
+      {/* Offline downloads */}
+      <section aria-label="Offline downloads" className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="flex items-center gap-2 font-semibold">
+            <HardDrive className="h-4 w-4 text-primary" /> Offline downloads
+          </h2>
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {offlineItems.length} tracks • {offlineTotal > 0 ? `${(offlineTotal / (1024 * 1024)).toFixed(1)} MB` : '0 MB'}
+          </span>
+        </div>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="auto-offline">Auto-cache favorites</Label>
+              <p className="text-xs text-muted-foreground">
+                নতুন favorite সেভ করলেই সেটি ডিভাইসে ডাউনলোড হয়ে যাবে (offline playback)।
+              </p>
+            </div>
+            <Switch
+              id="auto-offline"
+              checked={s.autoOfflineFavorites}
+              onCheckedChange={s.setAutoOfflineFavorites}
+            />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant="outline"
+              className="rounded-full gap-1.5"
+              disabled={offlineItems.length === 0}
+              onClick={() => {
+                offlineClear().then(() => toast.success('All downloads removed'))
+              }}
+            >
+              <Trash2 className="h-4 w-4" /> Remove all downloads
+            </Button>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            Downloads live only on this device (Cache Storage). Offline playback uses the Hi-Fi engine.
+          </p>
+        </div>
+      </section>
+
       {/* Network */}
       <section aria-label="Network" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between">
@@ -291,7 +583,13 @@ export function SettingsView() {
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
           Dhun automatically falls back between free community instances. Playback always uses
-          YouTube&apos;s official embedded player.
+          YouTube&apos;s official embedded player. Cast:{' '}
+          {castAvailable ? (
+            <span className="text-emerald-500 font-medium">available — look for the cast icon in the player</span>
+          ) : (
+            <span>open Dhun in Chrome/Edge on the same Wi-Fi as your Chromecast</span>
+          )}
+          .
         </p>
       </section>
 
@@ -325,10 +623,11 @@ export function SettingsView() {
         <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-2xl">
           🎵
         </div>
-        <p className="font-semibold text-foreground">Dhun v1.0</p>
+        <p className="font-semibold text-foreground">Dhun v1.1</p>
         <p className="mt-1 max-w-sm mx-auto">
-          A free, open music platform built on public APIs: Piped (metadata), LRCLIB (synced lyrics),
-          iTunes (artwork) and YouTube&apos;s official embedded player. No ads, no account, no tracking.
+          A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog),
+          LRCLIB (synced lyrics), iTunes (artwork) and YouTube&apos;s official embedded player. Cloud sync on
+          Turso, offline downloads, Chromecast. No ads, no tracking.
         </p>
         <p className="mt-2">Made with ♥ for listeners</p>
       </section>

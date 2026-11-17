@@ -2,6 +2,8 @@
 import { create } from 'zustand'
 import { toast } from 'sonner'
 import type { LibraryTrack, MusicItem, PlaylistDetail, PlaylistSummary } from '@/lib/types'
+import { useSettings } from './settings'
+import { useOffline } from './offline'
 
 interface LibraryState {
   favorites: LibraryTrack[]
@@ -28,6 +30,7 @@ function itemToTrack(item: MusicItem): Omit<LibraryTrack, 'id'> & { trackId: str
     artist: item.artist,
     artwork: item.artwork,
     duration: item.duration || 0,
+    source: item.source === 'au' ? 'au' : 'yt',
   }
 }
 
@@ -81,6 +84,13 @@ export const useLibrary = create<LibraryState>((set, get) => ({
         toast.error('Could not save favorite')
       } else {
         toast.success('Saved to Favorites', { description: item.title.slice(0, 48) })
+        // Auto-cache for offline when enabled in Settings
+        if (useSettings.getState().autoOfflineFavorites && !useOffline.getState().isDownloaded(item.id)) {
+          useOffline
+            .getState()
+            .download(item, item.source === 'au' ? 'au' : 'yt')
+            .catch(() => {})
+        }
       }
     }
   },

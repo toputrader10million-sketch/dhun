@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
-import { Sparkles, History, RefreshCw } from 'lucide-react'
+import { Sparkles, History, RefreshCw, AudioWaveform } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
 import { TrackRow } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,6 +17,7 @@ export function HomeView({ region }: { region?: string }) {
   const [data, setData] = useState<HomeResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
+  const [audius, setAudius] = useState<MusicItem[]>([])
   const playItem = usePlayer((s) => s.playItem)
   const history = useLibrary((s) => s.history)
   const loadAll = useLibrary((s) => s.loadAll)
@@ -44,12 +45,28 @@ export function HomeView({ region }: { region?: string }) {
     }
   }, [activeRegion])
 
+  useEffect(() => {
+    let alive = true
+    fetch('/api/audius/trending')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((d) => {
+        if (alive) setAudius(d.items || [])
+      })
+      .catch(() => {
+        if (alive) setAudius([])
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
   const quickPicks: MusicItem[] = history.slice(0, 10).map((h) => ({
     id: h.trackId,
     title: h.title,
     artist: h.artist,
     artwork: h.artwork || '',
     duration: h.duration,
+    source: h.source,
   }))
 
   const refresh = () => {
@@ -125,6 +142,28 @@ export function HomeView({ region }: { region?: string }) {
           onPlayAll={section.items.length > 0 ? () => playItem(section.items[0], section.items) : undefined}
         />
       ))}
+
+      {/* Audius trending (indie / direct-stream catalog) */}
+      <section className="mb-8" aria-label="Audius trending">
+        <div className="mb-3 flex items-center gap-2">
+          <AudioWaveform className="h-4 w-4 text-primary" />
+          <h2 className="text-lg font-bold">Audius Trending</h2>
+          <span className="rounded-full bg-primary/15 text-primary text-[10px] font-semibold px-2 py-0.5">
+            direct stream
+          </span>
+        </div>
+        {audius.length > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
+            {audius.slice(0, 6).map((item, i) => (
+              <TrackRow key={`${item.id}-${i}`} item={item} index={i} context={audius} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-xs text-muted-foreground">
+            Audius catalog unavailable right now — indie tracks appear here when the network recovers.
+          </p>
+        )}
+      </section>
 
       {!loading && !error && (!data || data.sections.every((s) => s.items.length === 0)) && (
         <div className="rounded-xl bg-accent/40 p-6 text-center">
