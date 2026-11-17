@@ -2,6 +2,8 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ChevronDown,
+  ChevronUp,
+  GripVertical,
   Heart,
   ListMusic,
   Loader2,
@@ -19,6 +21,7 @@ import {
   AudioWaveform,
   Cast,
   Download,
+  X,
 } from 'lucide-react'
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Slider } from '@/components/ui/slider'
@@ -31,10 +34,11 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog'
-import { TrackRow } from '@/components/track-row'
+import { TrackImage } from '@/components/track-row'
 import { LyricsPanel } from './lyrics-panel'
 import { HandoffDialog } from './handoff-dialog'
 import { usePlayer } from '@/store/player'
+import type { MusicItem } from '@/lib/types'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
@@ -151,6 +155,103 @@ function SleepTimerDialog() {
   )
 }
 
+/**
+ * Reorderable queue row (Up Next tab).
+ * - Desktop: HTML5 drag & drop via the grip handle.
+ * - Touch: dedicated up/down buttons (HTML5 DnD is unreliable on mobile).
+ */
+function QueueRow({
+  item,
+  absIndex,
+  isFirst,
+  isLast,
+  onPlay,
+  onRemove,
+  onMove,
+  dragProps,
+  isDragging,
+  isDragTarget,
+}: {
+  item: MusicItem
+  absIndex: number
+  isFirst: boolean
+  isLast: boolean
+  onPlay: () => void
+  onRemove: () => void
+  onMove: (dir: -1 | 1) => void
+  dragProps: React.HTMLAttributes<HTMLDivElement>
+  isDragging: boolean
+  isDragTarget: boolean
+}) {
+  return (
+    <div
+      draggable
+      onDragStart={dragProps.onDragStart}
+      onDragOver={dragProps.onDragOver}
+      onDragLeave={dragProps.onDragLeave}
+      onDrop={dragProps.onDrop}
+      onDragEnd={dragProps.onDragEnd}
+      className={cn(
+        'group flex items-center gap-2 rounded-xl p-2 transition-colors cursor-pointer select-none',
+        'hover:bg-accent/60',
+        isDragging && 'opacity-40',
+        isDragTarget && 'ring-1 ring-primary bg-accent'
+      )}
+      onClick={onPlay}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onPlay()
+        }
+      }}
+      aria-label={`Play next: ${item.title}. Position ${absIndex + 1} in queue.`}
+    >
+      <span
+        className="flex flex-col shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground"
+        aria-hidden
+        onClick={(e) => e.stopPropagation()}
+      >
+        <GripVertical className="h-4 w-4" />
+      </span>
+      <TrackImage item={item} className="h-11 w-11" rounded="rounded-md" />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{item.title}</p>
+        <p className="truncate text-xs text-muted-foreground">{item.artist}</p>
+      </div>
+      <span className="text-xs text-muted-foreground tabular-nums shrink-0">
+        {formatDuration(item.duration)}
+      </span>
+      <span className="flex shrink-0 flex-col" onClick={(e) => e.stopPropagation()}>
+        <button
+          onClick={() => onMove(-1)}
+          disabled={isFirst}
+          className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-25 disabled:hover:bg-transparent"
+          aria-label={`Move ${item.title} up in queue`}
+        >
+          <ChevronUp className="h-3.5 w-3.5" />
+        </button>
+        <button
+          onClick={() => onMove(1)}
+          disabled={isLast}
+          className="rounded p-0.5 text-muted-foreground hover:text-foreground hover:bg-accent disabled:opacity-25 disabled:hover:bg-transparent"
+          aria-label={`Move ${item.title} down in queue`}
+        >
+          <ChevronDown className="h-3.5 w-3.5" />
+        </button>
+      </span>
+      <button
+        onClick={onRemove}
+        className="rounded-full p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent shrink-0"
+        aria-label={`Remove ${item.title} from queue`}
+      >
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  )
+}
+
 export function NowPlaying() {
   const open = useUi((s) => s.nowPlayingOpen)
   const setOpen = (v: boolean) => {
@@ -191,6 +292,11 @@ export function NowPlaying() {
   const castDuration = useCast((s) => s.duration)
   const castCurrent = usePlayer((s) => s.castCurrent)
   const stopCast = useCast((s) => s.actions.stopCast)
+  const moveInQueue = usePlayer((s) => s.moveInQueue)
+  // Queue reorder drag state (absolute queue indices)
+  const dragFromRef = useRef<number | null>(null)
+  const [draggingIdx, setDraggingIdx] = useState<number | null>(null)
+  const [dragOverIdx, setDragOverIdx] = useState<number | null>(null)
   const downloaded = useOffline((s) => s.isDownloaded(current?.id ?? ''))
   const downloading = useOffline((s) => s.isDownloading(current?.id ?? ''))
   const dlProgress = useOffline((s) => (current ? s.progress[current.id] : undefined))
@@ -429,15 +535,49 @@ export function NowPlaying() {
                       <p className="px-2 pb-1 text-xs font-medium text-muted-foreground">
                         Next from queue
                       </p>
-                      {upNext.map((t, i) => (
-                        <TrackRow
-                          key={`${t.id}-${t.queuedAt}`}
-                          item={t}
-                          index={i}
-                          context={queue.map((q) => q)}
-                          onRemove={() => removeFromQueue(index + 1 + i)}
-                        />
-                      ))}
+                      {upNext.map((t, i) => {
+                        const abs = index + 1 + i
+                        return (
+                          <QueueRow
+                            key={`${t.id}-${t.queuedAt}`}
+                            item={t}
+                            absIndex={abs}
+                            isFirst={i === 0}
+                            isLast={i === upNext.length - 1}
+                            onPlay={() => playQueueAt(abs)}
+                            onRemove={() => removeFromQueue(abs)}
+                            onMove={(dir) => moveInQueue(abs, abs + dir)}
+                            isDragging={draggingIdx === abs}
+                            isDragTarget={dragOverIdx === abs && draggingIdx !== null && draggingIdx !== abs}
+                            dragProps={{
+                              onDragStart: () => {
+                                dragFromRef.current = abs
+                                setDraggingIdx(abs)
+                              },
+                              onDragOver: (e) => {
+                                e.preventDefault()
+                                e.dataTransfer.dropEffect = 'move'
+                                setDragOverIdx(abs)
+                              },
+                              onDragLeave: () =>
+                                setDragOverIdx((cur) => (cur === abs ? null : cur)),
+                              onDrop: (e) => {
+                                e.preventDefault()
+                                const from = dragFromRef.current
+                                dragFromRef.current = null
+                                setDraggingIdx(null)
+                                setDragOverIdx(null)
+                                if (from !== null && from !== abs) moveInQueue(from, abs)
+                              },
+                              onDragEnd: () => {
+                                dragFromRef.current = null
+                                setDraggingIdx(null)
+                                setDragOverIdx(null)
+                              },
+                            }}
+                          />
+                        )
+                      })}
                     </>
                   )}
                 </div>

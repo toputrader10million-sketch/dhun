@@ -39,6 +39,8 @@ interface PlayerState {
   addToQueue: (item: MusicItem) => void
   playNext: (item: MusicItem) => void
   removeFromQueue: (i: number) => void
+  /** Reorder the queue: move the track at absolute index `from` to `to` (splice semantics). */
+  moveInQueue: (from: number, to: number) => void
   clearQueue: () => void
   togglePlay: () => void
   next: () => void
@@ -484,6 +486,24 @@ export const usePlayer = create<PlayerState>()(
             let index = s.index
             if (i < s.index) index -= 1
             return { queue, index: Math.min(index, queue.length - 1) }
+          })
+        },
+
+        moveInQueue: (from, to) => {
+          if (from === to) return
+          set((s) => {
+            if (
+              from < 0 ||
+              to < 0 ||
+              from >= s.queue.length ||
+              to >= s.queue.length ||
+              from === to
+            )
+              return {}
+            const queue = [...s.queue]
+            const [moved] = queue.splice(from, 1)
+            queue.splice(to, 0, moved)
+            return { queue }
           })
         },
 
