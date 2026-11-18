@@ -1,6 +1,7 @@
 'use client'
-import { useEffect, useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { ThemeProvider } from 'next-themes'
+import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
 import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower, Keyboard, BarChart3 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
@@ -32,6 +33,9 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
 
+/* Shared spring for nav indicators — snappy slide, no overshoot bounce */
+const NAV_SPRING = { type: 'spring' as const, stiffness: 520, damping: 42 }
+
 function subscribeOnline(onChange: () => void) {
   window.addEventListener('online', onChange)
   window.addEventListener('offline', onChange)
@@ -61,7 +65,7 @@ function ShortcutsButton() {
   return (
     <button
       onClick={() => setOpen(true)}
-      className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+      className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground transition-[background-color,transform] hover:bg-accent/60 hover:text-foreground active:scale-[0.97]"
       aria-haspopup="dialog"
       aria-label="Keyboard shortcuts"
     >
@@ -81,6 +85,8 @@ export function AppShell() {
   const appTheme = useSettings((s) => s.appTheme)
   const crossfade = useSettings((s) => s.crossfade)
   const region = useSettings((s) => s.region)
+  const reduceMotion = !!useReducedMotion()
+  const [scrolled, setScrolled] = useState(false)
 
   // Global keyboard shortcuts (playback, navigation, help dialog)
   useKeyboardShortcuts()
@@ -111,6 +117,19 @@ export function AppShell() {
     document.documentElement.dataset.appTheme = appTheme
   }, [appTheme])
 
+  // New view starts at the top (old view exits while we snap home)
+  useEffect(() => {
+    window.scrollTo(0, 0)
+  }, [view])
+
+  // Scroll-reactive header elevation (mobile/tablet)
+  useEffect(() => {
+    const onScroll = () => setScrolled(window.scrollY > 6)
+    onScroll()
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => window.removeEventListener('scroll', onScroll)
+  }, [])
+
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <RegisterSW />
@@ -118,10 +137,10 @@ export function AppShell() {
       <OfflineBanner />
 
       <div className="min-h-screen">
-        {/* Desktop sidebar */}
-        <aside className="fixed inset-y-0 left-0 z-50 hidden w-60 flex-col border-r bg-card/50 px-3 py-4 md:flex">
+        {/* Desktop sidebar (from lg: tablets keep the roomy full-width layout) */}
+        <aside className="fixed inset-y-0 left-0 z-50 hidden w-60 flex-col border-r bg-card/50 px-3 py-4 lg:flex">
           <button
-            className="mb-6 flex items-center gap-2.5 px-2 text-left"
+            className="mb-6 flex items-center gap-2.5 px-2 text-left transition-transform duration-150 active:scale-[0.98]"
             onClick={() => setView('home')}
             aria-label="Dhun home"
           >
@@ -134,24 +153,42 @@ export function AppShell() {
             </span>
           </button>
           <nav className="flex flex-col gap-1" aria-label="Main navigation">
-            {NAV.map((n) => (
-              <button
-                key={n.id}
-                onClick={() => setView(n.id)}
-                className={cn(
-                  'flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors',
-                  view === n.id ? 'bg-accent text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
-                )}
-                aria-current={view === n.id ? 'page' : undefined}
-              >
-                <n.icon className="h-4.5 w-4.5" aria-hidden="true" /> {n.label}
-              </button>
-            ))}
+            {NAV.map((n) => {
+              const active = view === n.id
+              return (
+                <button
+                  key={n.id}
+                  onClick={() => setView(n.id)}
+                  className={cn(
+                    'relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-[color,transform] duration-150 active:scale-[0.98]',
+                    active ? 'text-foreground' : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+                  )}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="dhun-nav-pill"
+                      className="absolute inset-0 rounded-xl bg-accent"
+                      transition={NAV_SPRING}
+                      aria-hidden
+                    />
+                  )}
+                  <n.icon
+                    className={cn(
+                      'relative h-4.5 w-4.5 transition-colors',
+                      active && 'text-primary'
+                    )}
+                    aria-hidden="true"
+                  />
+                  <span className="relative">{n.label}</span>
+                </button>
+              )
+            })}
           </nav>
           <ShortcutsButton />
           <button
             onClick={() => goSearch()}
-            className="mt-4 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors"
+            className="mt-4 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/60 hover:text-foreground active:scale-[0.98]"
           >
             <Home className="hidden" aria-hidden="true" />
             <Compass className="h-4.5 w-4.5" aria-hidden="true" /> Search anything…
@@ -163,10 +200,19 @@ export function AppShell() {
         </aside>
 
         {/* Main column */}
-        <div className="md:pl-60 flex min-h-screen flex-col">
-          {/* Mobile header */}
-          <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-background/95 backdrop-blur px-4 py-3 md:hidden">
-            <button className="flex items-center gap-2" onClick={() => setView('home')} aria-label="Dhun home">
+        <div className="lg:pl-60 flex min-h-screen flex-col">
+          {/* Mobile/tablet header — glass deepens + elevates once scrolled */}
+          <header
+            className={cn(
+              'sticky top-0 z-40 flex items-center justify-between border-b bg-background/80 backdrop-blur px-4 py-3 transition-[background-color,box-shadow] duration-300 lg:hidden',
+              scrolled && 'bg-background/95 shadow-lg shadow-black/10'
+            )}
+          >
+            <button
+              className="flex items-center gap-2 transition-transform duration-150 active:scale-[0.97]"
+              onClick={() => setView('home')}
+              aria-label="Dhun home"
+            >
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <AudioWaveform className="h-4.5 w-4.5" aria-hidden="true" />
               </span>
@@ -174,24 +220,35 @@ export function AppShell() {
             </button>
             <button
               onClick={() => goSearch()}
-              className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground"
+              className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground transition-[background-color,transform] active:scale-[0.95]"
               aria-label="Search"
             >
               <Compass className="h-4 w-4" aria-hidden="true" /> Search
             </button>
           </header>
 
-          <main className="flex-1 pb-44 md:pb-28" id="main-content">
-            {view === 'home' && <HomeView key={region} />}
-            {view === 'explore' && <ExploreView />}
-            {view === 'charts' && <ChartsView />}
-            {view === 'library' && <LibraryView />}
-            {view === 'network' && <NetworkView />}
-            {view === 'settings' && <SettingsView />}
+          <main className="flex-1 pb-44 lg:pb-28" id="main-content">
+            {/* Animated view transitions: exit → enter, transform-only, reduced-motion aware */}
+            <AnimatePresence mode="wait" initial={false}>
+              <motion.div
+                key={view}
+                initial={reduceMotion ? { opacity: 0 } : { opacity: 0, y: 18 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={reduceMotion ? { opacity: 0 } : { opacity: 0, y: -12 }}
+                transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+              >
+                {view === 'home' && <HomeView key={region} />}
+                {view === 'explore' && <ExploreView />}
+                {view === 'charts' && <ChartsView />}
+                {view === 'library' && <LibraryView />}
+                {view === 'network' && <NetworkView />}
+                {view === 'settings' && <SettingsView />}
+              </motion.div>
+            </AnimatePresence>
           </main>
 
-          {/* Footer note (desktop) */}
-          <footer className="mt-auto hidden md:block border-t px-6 py-3 text-center text-[11px] text-muted-foreground">
+          {/* Footer note (desktop) — mt-auto keeps it pinned on short pages */}
+          <footer className="mt-auto hidden border-t px-6 py-3 text-center text-[11px] text-muted-foreground lg:block">
             Dhun — a free PWA music platform. Metadata by Piped, indie catalog by Audius, lyrics by LRCLIB,
             artwork by iTunes, playback via YouTube&apos;s official embedded player. No ads. No tracking.
           </footer>
@@ -204,25 +261,42 @@ export function AppShell() {
         {/* Keyboard shortcuts help dialog */}
         <ShortcutsDialog />
 
-        {/* Mobile bottom nav */}
+        {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav
-          className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background/95 backdrop-blur md:hidden pb-safe"
+          className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background/95 backdrop-blur lg:hidden pb-safe"
           aria-label="Bottom navigation"
         >
-          {NAV.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => setView(n.id)}
-              className={cn(
-                'flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors',
-                view === n.id ? 'text-primary' : 'text-muted-foreground'
-              )}
-              aria-current={view === n.id ? 'page' : undefined}
-            >
-              <n.icon className={cn('h-5 w-5', view === n.id && 'fill-accent')} aria-hidden="true" />
-              {n.label}
-            </button>
-          ))}
+          {NAV.map((n) => {
+            const active = view === n.id
+            return (
+              <button
+                key={n.id}
+                onClick={() => setView(n.id)}
+                className={cn(
+                  'relative flex flex-1 flex-col items-center justify-center gap-0.5 text-[10px] font-medium transition-colors active:scale-95',
+                  active ? 'text-primary' : 'text-muted-foreground'
+                )}
+                aria-current={active ? 'page' : undefined}
+              >
+                {active && (
+                  <motion.span
+                    layoutId="dhun-nav-rail"
+                    className="absolute top-0 h-0.5 w-10 rounded-full bg-primary"
+                    transition={NAV_SPRING}
+                    aria-hidden
+                  />
+                )}
+                <motion.span
+                  className="flex h-7 w-7 items-center justify-center"
+                  animate={active ? { scale: 1.15, y: -1 } : { scale: 1, y: 0 }}
+                  transition={NAV_SPRING}
+                >
+                  <n.icon className="h-5 w-5" aria-hidden="true" />
+                </motion.span>
+                {n.label}
+              </button>
+            )
+          })}
         </nav>
 
         {/* Visible YouTube player bubble (official embed, audio-first) */}

@@ -162,5 +162,15 @@
 - **Day 18** ✅ — **Auto-mix**: কিউ শেষের ২ ট্র্যাকের মধ্যে এলে সাইলেন্টলি similar ট্র্যাক যোগ হয় (৩০ সেকেন্ড থ্রটল, single-flight) — মিউজিক কখনো থামে না। Settings-এ টগল।
 - **Day 19** ✅ — **AI playlist builder**: Library-তে "AI playlist" ডায়ালগ — prompt (বাংলা/English) → LLM ২৫-ট্র্যাক spec → ক্যাটালগ রেজোলিউশন (bounded concurrency, playable-title ফিল্টার) → আসল playlist সেভ + অটো-ওপেন। সৎ progress UI (composing → x/N matched → saving)। `/api/ai/playlist`।
 - **Day 20** ✅ — **Smart home**: লোকাল hour অনুযায়ী ডে-পার্ট সেকশন (Morning Energy / Afternoon Focus / Evening Vibes / Late Night Lo-fi), আবহাওয়া-সচেতন সেকশন (বৃষ্টি → "Rainy Day Melodies" প্রথমে), লাইভ weather চিপ (Open-Meteo, region→city ম্যাপ — geolocation permission ছাড়া)। `/api/weather`।
+- **Days 21-a** ✅ — **Dynamic & Responsive pass** (ইউজার রিকোয়েস্ট "make our platform more dynamic and responsive"):
+  - **Animated view transitions** — framer-motion `AnimatePresence mode="wait"` দিয়ে প্রতিটা ভিউ সুইচ এখন fade+slide (transform-only, `useReducedMotion` সচেতন)।
+  - **Animated navigation** — ডেস্কটপ সাইডবারে `layoutId` sliding accent pill, মোবাইল bottom nav-এ sliding top rail + springy active icon।
+  - **Responsive breakpoint ফিক্স** — সাইডবার md(768px) → lg(1024px): ট্যাবলেট এখন cramped sidebar-এর বদলে full-width layout + bottom nav পায় (mini-player/seek row/footer সব lg-এ রি-অ্যালাইন)।
+  - **Real bug fix** — Tailwind-এ `xs` breakpoint কখনো ডিফাইন করা হয়নি → mini-player-এর Previous বাটন সব স্ক্রিনে invisible ছিল; `--breakpoint-xs: 30rem` যোগ → 480px+ এ দেখা যায় (browser-verified)।
+  - **MiniPlayer dynamism** — spring slide-up entrance, overflow-মাপা ping-pong marquee title (শর্ট টাইটেলে অ্যানিমেশন নেই), progress line-এ glowing leading dot।
+  - **Now Playing** — ট্র্যাক বদলালে artwork `dhun-art-in` + title `dhun-fade-slim` entrance।
+  - **Scroll-reactive header** — মোবাইল/ট্যাবলেট হেডার স্ক্রলে glass গাঢ় + elevation।
+  - **Home** — Jump back in + Audius তালিকায় staggered row entrance, গ্রিটিং `md:text-4xl`।
+  - সব অ্যানিমেশন `prefers-reduced-motion` সম্মান করে; lint শূন্য error; browser E2E (390/520/800/1280px) পাস।
 - **সাথে**: ১০টা pre-existing TypeScript error ফিক্স, TrackImage prop হার্ডেনিং, সব নতুন ভিউ mobile-first responsive (browser-verified)।
 

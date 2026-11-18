@@ -3,6 +3,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Compact-phone breakpoint: unlocks the `xs:` variant (e.g. mini-player prev button).
+ * Without this the `hidden xs:inline-flex` pattern collapses to always-hidden. */
+@theme {
+  --breakpoint-xs: 30rem;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -587,11 +593,69 @@ html[data-app-theme='neon-night'] .dhun-glass-strong {
   }
 }
 
+/* --- Marquee (long titles in the mini player) ---------------------------
+ * Ping-pong scroll: drift right half, pause, drift back. The second copy
+ * is aria-hidden. Enabled only when the text actually overflows (measured
+ * in MarqueeText), so short titles stay static.
+ */
+.dhun-marquee {
+  animation: dhun-marquee 14s ease-in-out infinite;
+  will-change: transform;
+}
+@keyframes dhun-marquee {
+  0%,
+  12% {
+    transform: translateX(0);
+  }
+  46%,
+  54% {
+    transform: translateX(-50%);
+  }
+  88%,
+  100% {
+    transform: translateX(0);
+  }
+}
+
+/* --- Track-change entrances (Now Playing) --------------------------------
+ * Artwork remounts (keyed by track id) and settles in; the title block
+ * fades up a touch lighter. Both are one-shot, compositor-friendly.
+ */
+.dhun-art-in {
+  animation: dhun-art-in 460ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes dhun-art-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+.dhun-fade-slim {
+  animation: dhun-fade-slim 340ms ease-out both;
+}
+@keyframes dhun-fade-slim {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 /* Reduced-motion: all new animations freeze to tasteful statics */
 @media (prefers-reduced-motion: reduce) {
   .dhun-ambient-glow,
   .dhun-eq > span,
-  .dhun-skeleton::after {
+  .dhun-skeleton::after,
+  .dhun-marquee,
+  .dhun-art-in,
+  .dhun-fade-slim {
     animation: none;
   }
   .dhun-eq > span {

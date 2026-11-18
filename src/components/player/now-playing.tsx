@@ -511,11 +511,14 @@ export function NowPlaying() {
             </div>
           </div>
 
-          {/* artwork + accent-tinted ambient glow */}
+          {/* artwork + accent-tinted ambient glow — sleeve re-enters per track */}
           <div className="relative mx-auto mt-6 w-[min(56vw,300px)] shrink-0">
             {/* soft radial halo behind the sleeve — static blur, transform-only animation */}
             <div className="dhun-ambient-glow" aria-hidden />
-            <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-primary/20">
+            <div
+              key={current.id}
+              className="dhun-art-in relative aspect-square overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-primary/20"
+            >
               {artSrc ? (
                 <img
                   src={artSrc}
@@ -540,9 +543,9 @@ export function NowPlaying() {
           </div>
           <Visualizer />
 
-          {/* title + actions */}
+          {/* title + actions — title block fades in softly on track change */}
           <div className="mt-6 flex items-start gap-3 px-6">
-            <div className="min-w-0 flex-1">
+            <div key={current.id} className="dhun-fade-slim min-w-0 flex-1">
               <h2 className="truncate text-xl font-bold leading-snug">{current.title}</h2>
               <p className="mt-0.5 truncate text-sm text-muted-foreground">{current.artist}</p>
             </div>

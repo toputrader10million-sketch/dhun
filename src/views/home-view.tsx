@@ -134,7 +134,10 @@ export function HomeView({ region }: { region?: string }) {
         <div className="relative flex items-start justify-between gap-3">
           <div>
             <p className="text-xs text-muted-foreground mb-1">Dhun • free music, your way</p>
-            <h1 className="dhun-gradient-text text-2xl sm:text-3xl font-extrabold tracking-tight" suppressHydrationWarning>
+            <h1
+              suppressHydrationWarning
+              className="dhun-gradient-text text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-tight"
+            >
               {greeting()}
               <span className="ml-2 text-primary">♪</span>
             </h1>
@@ -200,7 +203,13 @@ export function HomeView({ region }: { region?: string }) {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
             {quickPicks.slice(0, 6).map((item, i) => (
-              <TrackRow key={`${item.id}-${i}`} item={item} context={quickPicks} />
+              <div
+                key={`${item.id}-${i}`}
+                className="dhun-fade-up"
+                style={{ animationDelay: `${Math.min(i * 60, 300)}ms` }}
+              >
+                <TrackRow item={item} context={quickPicks} />
+              </div>
             ))}
           </div>
         </section>
@@ -237,7 +246,13 @@ export function HomeView({ region }: { region?: string }) {
         {audius.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
             {audius.slice(0, 6).map((item, i) => (
-              <TrackRow key={`${item.id}-${i}`} item={item} index={i} context={audius} />
+              <div
+                key={`${item.id}-${i}`}
+                className="dhun-fade-up"
+                style={{ animationDelay: `${Math.min(i * 60, 300)}ms` }}
+              >
+                <TrackRow item={item} index={i} context={audius} />
+              </div>
             ))}
           </div>
         ) : (
