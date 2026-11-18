@@ -1,11 +1,16 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  ClipboardPaste,
+  Copy,
+  FileDown,
+  FileUp,
   Heart,
   History,
   ListMusic,
   Loader2,
+  MoreVertical,
   Music4,
   Plus,
   Trash2,
@@ -35,12 +40,158 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Textarea } from '@/components/ui/textarea'
+import { toast } from 'sonner'
 import type { MusicItem, PlaylistDetail } from '@/lib/types'
 import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
 import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
 import { AiPlaylistDialog } from '@/components/ai-playlist-dialog'
+import { encodePlaylistCode, decodePlaylistCode, exportPlaylistFile, type PlaylistExport } from '@/lib/playlist-code'
+
+/** Day 27 — import a playlist from a DHUN1 share code or a JSON export file */
+function ImportPlaylistDialog() {
+  const [open, setOpen] = useState(false)
+  const [code, setCode] = useState('')
+  const [preview, setPreview] = useState<PlaylistExport | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [importing, setImporting] = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
+
+  const reset = () => {
+    setCode('')
+    setPreview(null)
+    setError(null)
+    setImporting(false)
+  }
+
+  const analyze = (text: string) => {
+    setCode(text)
+    setError(null)
+    setPreview(null)
+    if (!text.trim()) return
+    const res = decodePlaylistCode(text)
+    if (res.ok && res.data) setPreview(res.data)
+    else setError(res.error ?? 'Invalid code')
+  }
+
+  const runImport = async () => {
+    if (!preview) return
+    setImporting(true)
+    try {
+      const createRes = await fetch('/api/playlists', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: preview.name, description: preview.description ?? undefined }),
+      })
+      if (!createRes.ok) throw new Error()
+      const { id } = (await createRes.json()) as { id: string }
+      let added = 0
+      for (const item of preview.items) {
+        try {
+          const res = await fetch(`/api/playlists/${id}/items`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(item),
+          })
+          if (res.ok) added++
+        } catch {}
+      }
+      toast.success(`Imported "${preview.name}"`, { description: `${added}/${preview.items.length} songs added.` })
+      setOpen(false)
+      reset()
+      useLibrary.getState().refreshPlaylists()
+    } catch {
+      toast.error('Import failed — could not create the playlist')
+    } finally {
+      setImporting(false)
+    }
+  }
+
+  return (
+    <Dialog
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v)
+        if (!v) reset()
+      }}
+    >
+      <DialogTrigger asChild>
+        <Button variant="outline" size="sm" className="rounded-full gap-1.5">
+          <FileUp className="h-4 w-4" /> Import
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Import playlist</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          Paste a Dhun share code (DHUN1…) or open a .dhun.json export file. The playlist is
+          recreated on your account — nothing is overwritten.
+        </p>
+        <Textarea
+          value={code}
+          onChange={(e) => analyze(e.target.value)}
+          placeholder="DHUN1.xxxxxxxxxxxx"
+          className="min-h-24 font-mono text-xs"
+          aria-label="Share code"
+        />
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => fileRef.current?.click()}>
+            <FileUp className="h-3.5 w-3.5" /> Open file…
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json,.json"
+            className="hidden"
+            onChange={async (e) => {
+              const file = e.target.files?.[0]
+              if (file) analyze(await file.text())
+              e.target.value = ''
+            }}
+          />
+          <Button
+            variant="outline"
+            size="sm"
+            className="rounded-full gap-1.5"
+            onClick={async () => {
+              try {
+                const text = await navigator.clipboard.readText()
+                analyze(text)
+              } catch {
+                toast.error('Clipboard read blocked — paste manually')
+              }
+            }}
+          >
+            <ClipboardPaste className="h-3.5 w-3.5" /> Paste
+          </Button>
+        </div>
+        {error && <p className="text-xs text-destructive">{error}</p>}
+        {preview && (
+          <div className="rounded-xl bg-accent/40 p-3">
+            <p className="text-sm font-medium">{preview.name}</p>
+            <p className="text-xs text-muted-foreground">
+              {preview.items.length} songs
+              {preview.items[0] && ` — starts with “${preview.items[0].title.slice(0, 30)}”`}
+            </p>
+          </div>
+        )}
+        <Button disabled={!preview || importing} onClick={runImport} className="gap-1.5">
+          {importing && <Loader2 className="h-4 w-4 animate-spin" />}
+          {importing ? 'Importing…' : preview ? `Import ${preview.items.length} songs` : 'Import'}
+        </Button>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 export function LibraryView() {
   const { favorites, history, playlists, loadAll, clearHistory, deletePlaylist } = useLibrary()
@@ -59,6 +210,7 @@ export function LibraryView() {
   const getPlaylistDetail = useLibrary((s) => s.getPlaylistDetail)
   const removeFromPlaylist = useLibrary((s) => s.removeFromPlaylist)
   const refreshPlaylists = useLibrary((s) => s.refreshPlaylists)
+  const [exportMenu, setExportMenu] = useState(false)
 
   useEffect(() => {
     loadAll()
@@ -117,6 +269,66 @@ export function LibraryView() {
               Play all
             </Button>
           )}
+          {/* Day 27 — export as JSON file or share code */}
+          <DropdownMenu open={exportMenu} onOpenChange={setExportMenu}>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="rounded-full p-2 text-muted-foreground hover:bg-accent hover:text-foreground"
+                aria-label="Export or share playlist"
+              >
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuItem
+                onClick={() => {
+                  exportPlaylistFile({
+                    name: openPlaylist.name,
+                    description: openPlaylist.description,
+                    items: openPlaylist.items.map((it) => ({
+                      trackId: it.trackId,
+                      title: it.title,
+                      artist: it.artist,
+                      artwork: it.artwork,
+                      duration: it.duration,
+                      source: it.source,
+                    })),
+                  })
+                  toast.success('Playlist file downloaded')
+                  setExportMenu(false)
+                }}
+              >
+                <FileDown className="mr-2 h-4 w-4" /> Export as JSON file
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async () => {
+                  const code = encodePlaylistCode({
+                    name: openPlaylist.name,
+                    description: openPlaylist.description,
+                    items: openPlaylist.items.map((it) => ({
+                      trackId: it.trackId,
+                      title: it.title,
+                      artist: it.artist,
+                      artwork: it.artwork,
+                      duration: it.duration,
+                      source: it.source,
+                    })),
+                  })
+                  try {
+                    await navigator.clipboard.writeText(code)
+                    toast.success('Share code copied', {
+                      description: 'Anyone can paste it in Library → Import to recreate this playlist.',
+                    })
+                  } catch {
+                    toast.error('Copy failed')
+                  }
+                  setExportMenu(false)
+                }}
+              >
+                <Copy className="mr-2 h-4 w-4" /> Copy share code
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
         {openPlaylist.items.length === 0 ? (
           <div className="rounded-xl bg-accent/40 p-8 text-center">
@@ -221,6 +433,7 @@ export function LibraryView() {
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{playlists.length} playlists</p>
             <div className="flex items-center gap-2">
+              <ImportPlaylistDialog />
               <AiPlaylistDialog
                 onCreated={(playlistId) => {
                   void showDetail(playlistId)

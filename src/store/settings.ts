@@ -6,6 +6,52 @@ export type AccentColor = 'rose' | 'amber' | 'violet' | 'emerald' | 'gold'
 export type PlaybackMode = 'iframe' | 'hifi'
 export type LyricsFontSize = 'sm' | 'md' | 'lg' | 'xl'
 
+/** Day 26 — Now Playing visualizer styles */
+export type VisualizerMode = 'off' | 'bars' | 'wave' | 'ring'
+
+/** Day 25 — EQ profiles are stored per audio source (+ a global default) */
+export type EqSourceKey = 'default' | 'yt' | 'au' | 'jm'
+export const EQ_SOURCE_KEYS: EqSourceKey[] = ['default', 'yt', 'au', 'jm']
+export const EQ_SOURCE_LABELS: Record<EqSourceKey, string> = {
+  default: 'All audio',
+  yt: 'YouTube',
+  au: 'Audius',
+  jm: 'Jamendo',
+}
+export interface EqProfile {
+  preset: EqPreset
+  gains: number[]
+}
+
+export type EqPreset =
+  | 'flat'
+  | 'bass'
+  | 'treble'
+  | 'vocal'
+  | 'electronic'
+  | 'acoustic'
+  | 'custom'
+
+export const EQ_PRESETS: Record<Exclude<EqPreset, 'custom'>, number[]> = {
+  flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+  bass: [7, 6, 5, 2.5, 0, 0, 0, 0, 1, 1.5],
+  treble: [-1, -1, 0, 0, 0, 1.5, 3.5, 5.5, 7, 8],
+  vocal: [-2.5, -2, 0, 2.5, 4.5, 4, 2.5, 0, -1, -2],
+  electronic: [6, 5.5, 1.5, 0, -1.5, 1, 2.5, 4.5, 6, 6.5],
+  acoustic: [4, 3.5, 2, 1.5, 1, 2, 3, 3.5, 2.5, 1.5],
+}
+
+/** Resolve the active EQ gains for a track source (falls back to the default profile). */
+export function eqGainsFor(profiles: Record<EqSourceKey, EqProfile>, source?: string): number[] {
+  const key: EqSourceKey = source === 'au' || source === 'jm' || source === 'yt' ? source : 'default'
+  const profile = profiles[key]
+  const gains = (profile ?? profiles.default)?.gains
+  return gains && gains.length === 10 ? gains : EQ_PRESETS.flat
+}
+
+/** Compact labels for the 10 EQ band frequencies (matches hifi EQ_FREQUENCIES). */
+export const EQ_FREQUENCIES_LABELS = ['32', '64', '125', '250', '500', '1k', '2k', '4k', '8k', '16k']
+
 /** Karaoke lyric text sizes (Day 12) */
 export const LYRICS_FONT_SIZES: Record<LyricsFontSize, { label: string; line: string; active: string }> = {
   sm: { label: 'S', line: 'text-base', active: 'text-2xl' },
@@ -78,24 +124,6 @@ export const ACCENT_GRADIENTS: (AccentGradient & { id: string; label: string })[
   { id: 'mint-cyan', label: 'Mint Cyan', from: '#34d399', to: '#22d3ee' },
   { id: 'gold-flame', label: 'Gold Flame', from: '#f59e0b', to: '#ef4444' },
 ]
-export type EqPreset =
-  | 'flat'
-  | 'bass'
-  | 'treble'
-  | 'vocal'
-  | 'electronic'
-  | 'acoustic'
-  | 'custom'
-
-export const EQ_PRESETS: Record<Exclude<EqPreset, 'custom'>, number[]> = {
-  flat: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-  bass: [7, 6, 5, 2.5, 0, 0, 0, 0, 1, 1.5],
-  treble: [-1, -1, 0, 0, 0, 1.5, 3.5, 5.5, 7, 8],
-  vocal: [-2.5, -2, 0, 2.5, 4.5, 4, 2.5, 0, -1, -2],
-  electronic: [6, 5.5, 1.5, 0, -1.5, 1, 2.5, 4.5, 6, 6.5],
-  acoustic: [4, 3.5, 2, 1.5, 1, 2, 3, 3.5, 2.5, 1.5],
-}
-
 interface SettingsState {
   accent: AccentColor
   /** Curated theme id from APP_THEMES (applied via <html data-app-theme>) */
@@ -107,8 +135,6 @@ interface SettingsState {
   region: string
   playbackMode: PlaybackMode
   volume: number
-  eqPreset: EqPreset
-  eqGains: number[]
   autoplayRadio: boolean
   gaplessPlayback: boolean
   /** Crossfade window in seconds (0 = off). Applied to the Hi-Fi engine. */
@@ -123,6 +149,18 @@ interface SettingsState {
   lyricsFontSize: LyricsFontSize
   /** Day 18: auto-extend the queue with similar tracks before it runs dry */
   autoMix: boolean
+  /** Day 23: smart downloads — keep favorites cached automatically */
+  smartDownloads: boolean
+  /** Day 23: only run the smart-download sweep on Wi-Fi-like connections */
+  smartWifiOnly: boolean
+  /** Day 23: cap on auto-cached tracks (manual downloads are never removed) */
+  smartLimit: number
+  /** Day 25: per-source EQ profiles (Web Audio chain in Hi-Fi engine) */
+  eqProfiles: Record<EqSourceKey, EqProfile>
+  /** Day 26: Now Playing visualizer style */
+  visualizer: VisualizerMode
+  /** Day 31: floating desktop now-playing widget with mini spectrum */
+  desktopWidget: boolean
   setPremium: (v: boolean) => void
   setAccent: (a: AccentColor) => void
   setAppTheme: (id: string) => void
@@ -131,8 +169,6 @@ interface SettingsState {
   setRegion: (r: string) => void
   setPlaybackMode: (m: PlaybackMode) => void
   setVolume: (v: number) => void
-  setEqPreset: (p: EqPreset) => void
-  setEqGain: (index: number, value: number) => void
   setAutoplayRadio: (v: boolean) => void
   setGaplessPlayback: (v: boolean) => void
   setCrossfade: (v: number) => void
@@ -142,6 +178,14 @@ interface SettingsState {
   setLyricsKaraoke: (v: boolean) => void
   setLyricsFontSize: (v: LyricsFontSize) => void
   setAutoMix: (v: boolean) => void
+  setSmartDownloads: (v: boolean) => void
+  setSmartWifiOnly: (v: boolean) => void
+  setSmartLimit: (v: number) => void
+  setEqProfilePreset: (source: EqSourceKey, p: Exclude<EqPreset, 'custom'>) => void
+  setEqProfileGain: (source: EqSourceKey, index: number, value: number) => void
+  resetEqProfile: (source: EqSourceKey) => void
+  setVisualizer: (v: VisualizerMode) => void
+  setDesktopWidget: (v: boolean) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -154,8 +198,6 @@ export const useSettings = create<SettingsState>()(
       region: 'IN',
       playbackMode: 'iframe',
       volume: 80,
-      eqPreset: 'flat',
-      eqGains: EQ_PRESETS.flat,
       autoplayRadio: true,
       gaplessPlayback: true,
       crossfade: 0,
@@ -166,6 +208,17 @@ export const useSettings = create<SettingsState>()(
       lyricsKaraoke: false,
       lyricsFontSize: 'md',
       autoMix: true,
+      smartDownloads: false,
+      smartWifiOnly: true,
+      smartLimit: 20,
+      eqProfiles: {
+        default: { preset: 'flat', gains: EQ_PRESETS.flat },
+        yt: { preset: 'flat', gains: EQ_PRESETS.flat },
+        au: { preset: 'flat', gains: EQ_PRESETS.flat },
+        jm: { preset: 'flat', gains: EQ_PRESETS.flat },
+      },
+      visualizer: 'bars',
+      desktopWidget: false,
       // Activating premium switches to the gold theme; deactivating reverts gold → rose.
       setPremium: (premium) =>
         set((s) => ({
@@ -187,14 +240,6 @@ export const useSettings = create<SettingsState>()(
       setRegion: (region) => set({ region }),
       setPlaybackMode: (playbackMode) => set({ playbackMode }),
       setVolume: (volume) => set({ volume: Math.max(0, Math.min(100, volume)) }),
-      setEqPreset: (p) =>
-        set((s) => ({ eqPreset: p, eqGains: p === 'custom' ? s.eqGains : EQ_PRESETS[p] })),
-      setEqGain: (index, value) =>
-        set((s) => {
-          const gains = [...s.eqGains]
-          gains[index] = Math.max(-12, Math.min(12, value))
-          return { eqPreset: 'custom', eqGains: gains }
-        }),
       setAutoplayRadio: (autoplayRadio) => set({ autoplayRadio }),
       setGaplessPlayback: (gaplessPlayback) => set({ gaplessPlayback }),
       setCrossfade: (crossfade) => set({ crossfade: Math.max(0, Math.min(12, crossfade)) }),
@@ -204,8 +249,53 @@ export const useSettings = create<SettingsState>()(
       setLyricsKaraoke: (lyricsKaraoke) => set({ lyricsKaraoke }),
       setLyricsFontSize: (lyricsFontSize) => set({ lyricsFontSize }),
       setAutoMix: (autoMix) => set({ autoMix }),
+      setSmartDownloads: (smartDownloads) => set({ smartDownloads }),
+      setSmartWifiOnly: (smartWifiOnly) => set({ smartWifiOnly }),
+      setSmartLimit: (smartLimit) => set({ smartLimit: Math.max(5, Math.min(60, smartLimit)) }),
+      setEqProfilePreset: (source, preset) =>
+        set((s) => ({
+          eqProfiles: {
+            ...s.eqProfiles,
+            [source]: { preset, gains: EQ_PRESETS[preset] },
+          },
+        })),
+      setEqProfileGain: (source, index, value) =>
+        set((s) => {
+          const current = s.eqProfiles[source] ?? { preset: 'custom' as EqPreset, gains: EQ_PRESETS.flat }
+          const gains = [...current.gains]
+          gains[index] = Math.max(-12, Math.min(12, value))
+          return {
+            eqProfiles: { ...s.eqProfiles, [source]: { preset: 'custom', gains } },
+          }
+        }),
+      resetEqProfile: (source) =>
+        set((s) => ({
+          eqProfiles: { ...s.eqProfiles, [source]: { preset: 'flat', gains: EQ_PRESETS.flat } },
+        })),
+      setVisualizer: (visualizer) => set({ visualizer }),
+      setDesktopWidget: (desktopWidget) => set({ desktopWidget }),
     }),
-    { name: 'dhun-settings' }
+    {
+      name: 'dhun-settings',
+      version: 1,
+      // v0 → v1: the old global eqPreset/eqGains become the per-source "default" profile.
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Record<string, unknown>
+        if (version < 1 && !p.eqProfiles) {
+          const oldPreset = (p.eqPreset as EqPreset) ?? 'flat'
+          const oldGains = Array.isArray(p.eqGains) && (p.eqGains as number[]).length === 10
+            ? (p.eqGains as number[])
+            : EQ_PRESETS.flat
+          p.eqProfiles = {
+            default: { preset: oldPreset, gains: oldGains },
+            yt: { preset: 'flat', gains: EQ_PRESETS.flat },
+            au: { preset: 'flat', gains: EQ_PRESETS.flat },
+            jm: { preset: 'flat', gains: EQ_PRESETS.flat },
+          }
+        }
+        return p as never
+      },
+    }
   )
 )
 

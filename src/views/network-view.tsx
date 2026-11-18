@@ -4,13 +4,19 @@
  * preferred-instance badge and auto-refresh. All free-instance failover data.
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, Globe, Info, Loader2, RadioTower, RefreshCw, Zap } from 'lucide-react'
+import { Activity, BrainCircuit, Globe, Info, Loader2, RadioTower, RefreshCw, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { toast } from 'sonner'
 import type { InstanceHealth, InstanceHealthResponse } from '@/lib/types'
 import { cn } from '@/lib/utils'
+
+interface AiStatus {
+  llm: 'up' | 'down'
+  latencyMs: number
+  checkedAt: string
+}
 
 function latencyColor(ms: number, ok: boolean): string {
   if (!ok) return 'text-destructive'
@@ -43,7 +49,17 @@ export function NetworkView() {
   const [data, setData] = useState<InstanceHealthResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [auto, setAuto] = useState(true)
+  const [ai, setAi] = useState<AiStatus | null>(null)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  const refreshAi = useCallback(async () => {
+    try {
+      const res = await fetch('/api/ai/status')
+      if (res.ok) setAi((await res.json()) as AiStatus)
+    } catch {
+      setAi(null)
+    }
+  }, [])
 
   const refresh = useCallback(async (silent = false) => {
     if (!silent) setLoading(true)
@@ -60,7 +76,8 @@ export function NetworkView() {
 
   useEffect(() => {
     refresh()
-  }, [refresh])
+    refreshAi()
+  }, [refresh, refreshAi])
 
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current)
@@ -153,6 +170,35 @@ export function NetworkView() {
           </p>
           <p className="mt-1.5 text-[11px] text-muted-foreground">active instance</p>
         </div>
+      </div>
+
+      {/* AI services (Day 24) */}
+      <div className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <BrainCircuit className="h-4 w-4 text-primary" /> AI services
+          </h2>
+          {ai ? (
+            <span
+              className={cn(
+                'rounded-full px-2.5 py-1 text-[10px] font-semibold',
+                ai.llm === 'up' ? 'bg-emerald-500/15 text-emerald-500' : 'bg-destructive/15 text-destructive'
+              )}
+            >
+              {ai.llm === 'up' ? `LLM up · ${ai.latencyMs} ms` : 'LLM down'}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> probing…
+            </span>
+          )}
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          Copilot, natural-language search, AI playlists and the Daily Mix planner all run on one
+          shared language model with in-memory caches (identical requests answer instantly). When
+          the model is down, every AI feature falls back to an offline rule-based planner — you may
+          notice simpler, more literal results, but nothing breaks.
+        </p>
       </div>
 
       {/* Instance cards */}

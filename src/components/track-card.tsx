@@ -5,6 +5,7 @@ import { TrackImage } from './track-row'
 import { Skeleton } from '@/components/ui/skeleton'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
+import { useUi } from '@/store/ui'
 import { cn } from '@/lib/utils'
 
 interface TrackCardProps {
@@ -39,7 +40,26 @@ export const TrackCard = memo(function TrackCard({ item, context, size = 'md' }:
       >
         {item.title}
       </p>
-      <p className="mt-0.5 truncate text-xs text-muted-foreground">{item.artist}</p>
+      {/* Artist name doubles as the artist-page link (Day 29) */}
+      <span
+        role="link"
+        tabIndex={0}
+        onClick={(e) => {
+          e.stopPropagation()
+          if (item.artist && !/^unknown/i.test(item.artist)) useUi.getState().openArtist(item.artist)
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            e.stopPropagation()
+            if (item.artist && !/^unknown/i.test(item.artist)) useUi.getState().openArtist(item.artist)
+          }
+        }}
+        className="mt-0.5 block truncate text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+        aria-label={`Open artist page: ${item.artist}`}
+      >
+        {item.artist}
+      </span>
     </button>
   )
 })

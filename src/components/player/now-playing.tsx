@@ -40,6 +40,7 @@ import {
 import { TrackImage } from '@/components/track-row'
 import { LyricsPanel } from './lyrics-panel'
 import { HandoffDialog } from './handoff-dialog'
+import { Visualizer } from './visualizer'
 import { usePlayer } from '@/store/player'
 import type { MusicItem } from '@/lib/types'
 import { useUi } from '@/store/ui'
@@ -60,45 +61,6 @@ import { formatDuration } from '@/lib/format'
 import { hifiEngine } from '@/engine/hifi'
 import { youtubeEngine } from '@/engine/youtube'
 import { cn } from '@/lib/utils'
-
-function Visualizer() {
-  const hifiActive = usePlayer((s) => s.hifiActive)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  useEffect(() => {
-    if (!hifiActive) return
-    let raf: number
-    const canvas = canvasRef.current
-    const ctx2d = canvas?.getContext('2d')
-    const draw = () => {
-      raf = requestAnimationFrame(draw)
-      if (!canvas || !ctx2d) return
-      const levels = hifiEngine.getLevels()
-      ctx2d.clearRect(0, 0, canvas.width, canvas.height)
-      if (!levels) return
-      const bars = 32
-      const step = Math.floor(levels.length / bars)
-      const w = canvas.width / bars
-      for (let i = 0; i < bars; i++) {
-        const v = levels[i * step] / 255
-        const h = Math.max(2, v * canvas.height)
-        ctx2d.fillStyle = `oklch(0.65 0.22 20 / ${0.25 + v * 0.6})`
-        ctx2d.fillRect(i * w + 1, canvas.height - h, w - 2, h)
-      }
-    }
-    draw()
-    return () => cancelAnimationFrame(raf)
-  }, [hifiActive])
-  if (!hifiActive) return null
-  return (
-    <canvas
-      ref={canvasRef}
-      width={320}
-      height={48}
-      className="mt-3 w-full opacity-80"
-      aria-hidden
-    />
-  )
-}
 
 /** Sleep-timer fade guard: true once the volume ramp has started for the current timer. */
 let fadeApplied = false
@@ -425,6 +387,10 @@ export function NowPlaying() {
   const castTrackId = useCast((s) => s.trackId)
   const castPosition = useCast((s) => s.position)
   const castDuration = useCast((s) => s.duration)
+  const castConnecting = useCast((s) => s.connecting)
+  const castDevice = useCast((s) => s.deviceName)
+  const castVolume = useCast((s) => s.volume)
+  const setVolumeRemote = useCast((s) => s.actions.setVolumeRemote)
   const castCurrent = usePlayer((s) => s.castCurrent)
   const stopCast = useCast((s) => s.actions.stopCast)
   const moveInQueue = usePlayer((s) => s.moveInQueue)
@@ -541,13 +507,23 @@ export function NowPlaying() {
               )}
             </div>
           </div>
-          <Visualizer />
+          <Visualizer className="mx-auto mt-4 block max-w-full opacity-80" />
 
           {/* title + actions — title block fades in softly on track change */}
           <div className="mt-6 flex items-start gap-3 px-6">
             <div key={current.id} className="dhun-fade-slim min-w-0 flex-1">
               <h2 className="truncate text-xl font-bold leading-snug">{current.title}</h2>
-              <p className="mt-0.5 truncate text-sm text-muted-foreground">{current.artist}</p>
+              {current.artist && !/^unknown/i.test(current.artist) ? (
+                <button
+                  onClick={() => useUi.getState().openArtist(current.artist)}
+                  className="mt-0.5 block max-w-full truncate text-left text-sm text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+                  aria-label={`Open artist page: ${current.artist}`}
+                >
+                  {current.artist}
+                </button>
+              ) : (
+                <p className="mt-0.5 truncate text-sm text-muted-foreground">{current.artist}</p>
+              )}
             </div>
             <button
               onClick={() => {
@@ -566,17 +542,52 @@ export function NowPlaying() {
               )}
             </button>
             {castAvailable && (
-              <button
-                onClick={() => {
-                  if (casting) stopCast()
-                  else castCurrent()
-                }}
-                className={cn('inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0', casting && 'text-primary')}
-                aria-label={casting ? 'Disconnect cast' : 'Cast to device'}
-                title={casting ? 'Disconnect cast' : 'Cast to device'}
-              >
-                <Cast className="h-5 w-5" />
-              </button>
+              casting ? (
+                // Day 32: casting state — device name + receiver volume in a popover
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <button
+                      className="inline-flex h-11 items-center justify-center gap-1.5 rounded-full px-3 text-primary transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
+                      aria-label={`Casting${castDevice ? ` to ${castDevice}` : ''} — open cast controls`}
+                    >
+                      <Cast className="h-5 w-5" />
+                      {castDevice && <span className="max-w-24 truncate text-xs font-medium">{castDevice}</span>}
+                    </button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-56" align="center">
+                    <p className="mb-2 text-xs font-medium">Casting{castDevice ? ` to ${castDevice}` : ''}</p>
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-8">Vol</span>
+                      <Slider
+                        value={[castVolume]}
+                        min={0}
+                        max={100}
+                        step={1}
+                        onValueChange={(v) => setVolumeRemote(v[0])}
+                        aria-label="Receiver volume"
+                      />
+                      <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{castVolume}</span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full rounded-full"
+                      onClick={stopCast}
+                    >
+                      Stop casting
+                    </Button>
+                  </PopoverContent>
+                </Popover>
+              ) : (
+                <button
+                  onClick={castCurrent}
+                  className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
+                  aria-label={castConnecting ? 'Opening cast device picker' : 'Cast to device'}
+                  title={castConnecting ? 'Connecting…' : 'Cast to device'}
+                >
+                  {castConnecting ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <Cast className="h-5 w-5" />}
+                </button>
+              )
             )}
             <button
               onClick={async () => {

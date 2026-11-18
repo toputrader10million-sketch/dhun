@@ -11,7 +11,7 @@ import {
   updateMediaPositionState,
   setMediaPlaybackState,
 } from '@/engine/media-session'
-import { useSettings } from './settings'
+import { useSettings, eqGainsFor } from './settings'
 import { useOffline } from './offline'
 import { useKeys } from './keys'
 import { audioUrlFor } from '@/lib/offline'
@@ -169,6 +169,11 @@ export const usePlayer = create<PlayerState>()(
         youtubeEngine.stop()
       }
 
+      /** Day 25: load the per-source EQ profile into the Web Audio chain. */
+      function applyEqFor(item: MusicItem) {
+        hifiEngine.setEqGains(eqGainsFor(useSettings.getState().eqProfiles, item.source))
+      }
+
       /** Pre-buffer the next queue track into the Hi-Fi standby element. */
       function schedulePreload() {
         const s = get()
@@ -271,6 +276,7 @@ export const usePlayer = create<PlayerState>()(
             set({ hifiActive: true })
             const ok = await hifiEngine.playUrl(url, startSeconds)
             if (ok) {
+              applyEqFor(item)
               set({ isBuffering: false, loadingTrackId: null, embedMode: false })
               schedulePreload()
               sideEffects(item)
@@ -290,6 +296,7 @@ export const usePlayer = create<PlayerState>()(
             { watchdogMs: 10000 }
           )
           if (ok) {
+            applyEqFor(item)
             set({ isBuffering: false, loadingTrackId: null, embedMode: false })
             schedulePreload()
             sideEffects(item)
@@ -314,6 +321,7 @@ export const usePlayer = create<PlayerState>()(
             watchdogMs: 10000,
           })
           if (ok) {
+            applyEqFor(item)
             set({ isBuffering: false, loadingTrackId: null, embedMode: false })
             schedulePreload()
             sideEffects(item)
@@ -336,6 +344,7 @@ export const usePlayer = create<PlayerState>()(
           if (best?.url) {
             set({ hifiActive: true })
             hifiOk = await hifiEngine.playUrl(best.url, startSeconds, { watchdogMs: 8000 })
+            if (hifiOk) applyEqFor(item)
           }
           if (!hifiOk) {
             set({ hifiActive: false })
@@ -849,6 +858,7 @@ export const usePlayer = create<PlayerState>()(
             })
             const ok = await hifiEngine.swapToPreloaded()
             if (ok) {
+              applyEqFor(item)
               set({ isBuffering: false })
               updateMediaMetadata(item)
               setMediaPlaybackState('playing')

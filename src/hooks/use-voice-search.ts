@@ -102,11 +102,10 @@ export function useVoiceSearch(options?: {
   const clearError = useCallback(() => setError(null), [])
 
   const start = useCallback(() => {
+    // Capability is derived (no setter): when the constructor is missing the
+    // mic button is hidden upstream, so a start() call here is a no-op.
     const Ctor = getRecognitionCtor()
-    if (!Ctor) {
-      setSupported(false)
-      return
-    }
+    if (!Ctor) return
     // Fresh instance per session — reusing aborted instances is flaky.
     recRef.current?.abort()
     setError(null)

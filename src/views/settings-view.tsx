@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTheme } from 'next-themes'
 import {
   Activity,
@@ -15,6 +15,7 @@ import {
   Palette,
   Plus,
   RadioTower,
+  Sparkles,
   Sun,
   Trash2,
   Waves,
@@ -45,17 +46,24 @@ import { toast } from 'sonner'
 import {
   useSettings,
   EQ_PRESETS,
+  EQ_FREQUENCIES_LABELS,
   APP_THEMES,
   ACCENT_GRADIENTS,
   LYRICS_FONT_SIZES,
   applyAccent,
+  EQ_SOURCE_KEYS,
+  EQ_SOURCE_LABELS,
+  eqGainsFor,
   type AccentColor,
   type EqPreset,
+  type EqSourceKey,
   type LyricsFontSize,
+  type VisualizerMode,
 } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
 import { useUi } from '@/store/ui'
+import { useSmartDownloads, getNetworkSnapshot, subscribeNetwork, getNetworkServerSnapshot } from '@/lib/smart-downloads'
 import { triggerInstall } from '@/components/pwa/register-sw'
 import { useCast } from '@/lib/cast'
 import { HandoffDialog } from '@/components/player/handoff-dialog'
@@ -74,6 +82,97 @@ interface SyncInfo {
   counts: { favorites: number; playlists: number; history: number }
 }
 
+/** Day 25 — vertical 10-band slider row bound to one EQ profile */
+function EqSliders({ source, disabled }: { source: EqSourceKey; disabled?: boolean }) {
+  const eqProfiles = useSettings((s) => s.eqProfiles)
+  const setEqProfileGain = useSettings((s) => s.setEqProfileGain)
+  const gains = eqGainsFor(eqProfiles, source === 'default' ? undefined : source)
+  return (
+    <div className={cn('flex justify-between gap-1.5 sm:gap-2', disabled && 'opacity-40 pointer-events-none')}>
+      {gains.map((g, i) => (
+        <div key={i} className="flex flex-col items-center gap-2 flex-1">
+          <Slider
+            orientation="vertical"
+            value={[g]}
+            min={-12}
+            max={12}
+            step={0.5}
+            onValueChange={(v) => setEqProfileGain(source, i, v[0])}
+            className="h-24"
+            aria-label={`${EQ_FREQUENCIES[i]}Hz`}
+          />
+          <span className="text-[10px] text-muted-foreground">{EQ_FREQUENCIES_LABELS[i]}</span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** Day 25 — full per-source equalizer card */
+function EqualizerCard() {
+  const s = useSettings()
+  const [source, setSource] = useState<EqSourceKey>('default')
+  const profile = s.eqProfiles[source] ?? { preset: 'flat' as EqPreset, gains: EQ_PRESETS.flat }
+  return (
+    <section aria-label="Equalizer" className="mb-6 rounded-2xl border p-4 sm:p-5">
+      <h2 className="mb-1 flex items-center gap-2 font-semibold">
+        <Equal className="h-4 w-4 text-primary" /> Equalizer
+      </h2>
+      <p className="text-xs text-muted-foreground mb-4">
+        10-band EQ with a profile per audio source. Audible in Hi-Fi mode and for Audius, Jamendo and
+        offline playback — the YouTube embed player does not expose its audio, so it always plays flat.
+      </p>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {EQ_SOURCE_KEYS.map((k) => (
+          <button
+            key={k}
+            onClick={() => setSource(k)}
+            className={cn(
+              'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+              source === k ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
+            )}
+            aria-pressed={source === k}
+          >
+            {EQ_SOURCE_LABELS[k]}
+          </button>
+        ))}
+      </div>
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {EQ_PRESET_LIST.map((p) => (
+          <button
+            key={p}
+            onClick={() => s.setEqProfilePreset(source, p)}
+            className={cn(
+              'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+              profile.preset === p
+                ? 'border-primary bg-accent/60 text-foreground'
+                : 'text-muted-foreground hover:bg-accent/50'
+            )}
+            aria-pressed={profile.preset === p}
+          >
+            {EQ_PRESET_LABELS[p]}
+          </button>
+        ))}
+        {profile.preset === 'custom' && (
+          <span className="rounded-full border border-primary/50 bg-accent/60 px-2.5 py-1 text-[11px]">Custom</span>
+        )}
+        <button
+          onClick={() => s.resetEqProfile(source)}
+          className="ml-auto text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+        >
+          Reset {EQ_SOURCE_LABELS[source].toLowerCase()}
+        </button>
+      </div>
+      <EqSliders source={source} disabled={s.playbackMode !== 'hifi' && source === 'yt'} />
+      <p className="mt-3 text-[11px] text-muted-foreground">
+        {s.playbackMode !== 'hifi'
+          ? 'Switch audio engine to Hi-Fi (Playback above) to hear the EQ on YouTube tracks. Audius, Jamendo and offline playback always honor it.'
+          : 'EQ applies live — changes are heard instantly while a Hi-Fi track plays.'}
+      </p>
+    </section>
+  )
+}
+
 const REGIONS = [
   { code: 'BD', label: 'Bangladesh' },
   { code: 'IN', label: 'India' },
@@ -82,6 +181,132 @@ const REGIONS = [
   { code: 'DE', label: 'Germany' },
   { code: 'JP', label: 'Japan' },
 ]
+
+/** Day 23 — Smart downloads: keep favorites cached automatically (Wi-Fi aware) */
+function SmartDownloadsCard() {
+  const s = useSettings()
+  const running = useSmartDownloads((st) => st.running)
+  const progress = useSmartDownloads((st) => st.progress)
+  const lastResult = useSmartDownloads((st) => st.lastResult)
+  const sweepNow = useSmartDownloads((st) => st.sweepNow)
+  const offlineCount = useOffline((st) => st.items.length)
+  const net = useSyncExternalStore(subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot)
+
+  const netLine =
+    !net.online
+      ? 'offline'
+      : net.kind === 'wifi-like'
+        ? `unmetered connection${net.detail ? ` (${net.detail})` : ''}`
+        : net.kind === 'metered'
+          ? `metered connection${net.detail ? ` (${net.detail})` : ''}`
+          : `network type unknown${net.detail ? ` (${net.detail})` : ''} in this browser`
+
+  return (
+    <div className="space-y-3 rounded-xl border bg-accent/20 p-3">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Label htmlFor="smart-downloads" className="text-xs">
+            Smart downloads
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            Keeps your favorites cached automatically — checks on app start and whenever you come
+            online. Manual downloads are never touched.
+          </p>
+        </div>
+        <Switch
+          id="smart-downloads"
+          checked={s.smartDownloads}
+          onCheckedChange={(v) => {
+            s.setSmartDownloads(v)
+            if (v) toast('Smart downloads on', { description: 'Favorites will be cached in the background.' })
+          }}
+        />
+      </div>
+
+      {s.smartDownloads && (
+        <>
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <Label htmlFor="smart-wifi-only" className="text-xs">
+                Wi-Fi only
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {netLine}. Honest note: browsers hide exact Wi-Fi info — cellular and slow
+                connections are detected when possible, otherwise treated as unknown.
+              </p>
+            </div>
+            <Switch id="smart-wifi-only" checked={s.smartWifiOnly} onCheckedChange={s.setSmartWifiOnly} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="smart-limit">Keep up to</Label>
+            </div>
+            <Select value={String(s.smartLimit)} onValueChange={(v) => s.setSmartLimit(Number(v))}>
+              <SelectTrigger id="smart-limit" className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {[10, 20, 30, 40].map((n) => (
+                  <SelectItem key={n} value={String(n)}>
+                    {n} tracks
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="secondary"
+              size="sm"
+              className="rounded-full gap-1.5"
+              disabled={running}
+              onClick={() => void sweepNow()}
+            >
+              {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {running ? `Syncing ${progress.done + progress.failed}/${progress.total}…` : 'Sync favorites now'}
+            </Button>
+            {running && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-muted-foreground"
+                disabled={s.smartWifiOnly && net?.kind !== 'wifi-like'}
+                onClick={() => void sweepNow({ ignoreWifiRule: true })}
+              >
+                Run on this network anyway
+              </Button>
+            )}
+          </div>
+          {lastResult && !running && (
+            <p className="text-[11px] text-muted-foreground">
+              Last check {new Date(lastResult.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {lastResult.downloaded > 0
+                ? ` — saved ${lastResult.downloaded} track${lastResult.downloaded > 1 ? 's' : ''}`
+                : lastResult.skipped === 'up-to-date'
+                  ? ' — favorites already cached'
+                  : lastResult.skipped === 'limit-reached'
+                    ? ' — download limit reached'
+                    : lastResult.skipped
+                      ? ` — ${lastResult.skipped.replace(/-/g, ' ')}`
+                      : ''}
+              {offlineCount > 0 && ` • ${offlineCount} on device`}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+const EQ_PRESET_LIST: Exclude<EqPreset, 'custom'>[] = ['flat', 'bass', 'treble', 'vocal', 'electronic', 'acoustic']
+const EQ_PRESET_LABELS: Record<Exclude<EqPreset, 'custom'>, string> = {
+  flat: 'Flat',
+  bass: 'Bass boost',
+  treble: 'Treble',
+  vocal: 'Vocal',
+  electronic: 'Electronic',
+  acoustic: 'Acoustic',
+}
 
 const ACCENTS: { id: AccentColor; label: string; swatch: string; gold?: boolean }[] = [
   { id: 'rose', label: 'Rose', swatch: 'bg-[oklch(0.645_0.246_16.44)]' },
@@ -109,6 +334,8 @@ export function SettingsView() {
   const [linkCode, setLinkCode] = useState('')
   const [linking, setLinking] = useState(false)
   const importFileRef = useRef<HTMLInputElement>(null)
+  // Day 28: conflict strategy for backup import
+  const [importStrategy, setImportStrategy] = useState<'merge' | 'local' | 'cloud'>('merge')
   // Offline storage
   const offlineItems = useOffline((st) => st.items)
   const offlineTotal = useOffline((st) => st.totalSize())
@@ -546,6 +773,35 @@ export function SettingsView() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
+              <Label htmlFor="visualizer-select">Now Playing visualizer</Label>
+              <p className="text-xs text-muted-foreground">
+                Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube
+                embed player does not expose audio data, so it plays without a visualizer.
+              </p>
+            </div>
+            <Select value={s.visualizer} onValueChange={(v: VisualizerMode) => s.setVisualizer(v)}>
+              <SelectTrigger id="visualizer-select" className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off</SelectItem>
+                <SelectItem value="bars">Bars</SelectItem>
+                <SelectItem value="wave">Wave</SelectItem>
+                <SelectItem value="ring">Ring</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="desktop-widget">Desktop mini widget</Label>
+              <p className="text-xs text-muted-foreground">
+                A floating compact player with a live spectrum in the corner of the screen (desktop).
+              </p>
+            </div>
+            <Switch id="desktop-widget" checked={s.desktopWidget} onCheckedChange={s.setDesktopWidget} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
               <Label htmlFor="mini-art">Show art in mini player</Label>
             </div>
             <Switch id="mini-art" checked={s.showMiniArt} onCheckedChange={s.setShowMiniArt} />
@@ -593,54 +849,8 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Equalizer */}
-      <section aria-label="Equalizer" className="mb-6 rounded-2xl border p-4 sm:p-5">
-        <h2 className="mb-1 flex items-center gap-2 font-semibold">
-          <Equal className="h-4 w-4 text-primary" /> Equalizer
-        </h2>
-        <p className="text-xs text-muted-foreground mb-4">
-          10-band EQ — active in Hi-Fi mode. Presets: {Object.keys(EQ_PRESETS).join(', ')}.
-        </p>
-        <div className="mb-4">
-          <Select value={s.eqPreset} onValueChange={(v: EqPreset) => s.setEqPreset(v)}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {(Object.keys(EQ_PRESETS) as Exclude<EqPreset, 'custom'>[]).map((p) => (
-                <SelectItem key={p} value={p} className="capitalize">
-                  {p}
-                </SelectItem>
-              ))}
-              {s.eqPreset === 'custom' && <SelectItem value="custom">Custom</SelectItem>}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className={cn('flex justify-between gap-2', s.playbackMode !== 'hifi' && 'opacity-40 pointer-events-none')}>
-          {s.eqGains.map((g, i) => (
-            <div key={i} className="flex flex-col items-center gap-2 flex-1">
-              <Slider
-                orientation="vertical"
-                value={[g]}
-                min={-12}
-                max={12}
-                step={0.5}
-                onValueChange={(v) => s.setEqGain(i, v[0])}
-                className="h-24"
-                aria-label={`${EQ_FREQUENCIES[i]}Hz`}
-              />
-              <span className="text-[10px] text-muted-foreground">
-                {EQ_FREQUENCIES[i] >= 1000 ? `${EQ_FREQUENCIES[i] / 1000}k` : EQ_FREQUENCIES[i]}
-              </span>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          {s.playbackMode !== 'hifi'
-            ? 'Switch audio engine to Hi-Fi to enable the equalizer.'
-            : 'EQ applies live to Hi-Fi playback.'}
-        </p>
-      </section>
+      {/* Equalizer (Day 25) */}
+      <EqualizerCard />
 
       {/* Cloud Sync */}
       <section aria-label="Cloud sync" className="mb-6 rounded-2xl border p-4 sm:p-5">
@@ -811,12 +1021,18 @@ export function SettingsView() {
                     const res = await fetch('/api/sync/data', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
-                      body: text,
+                      body: JSON.stringify({ ...JSON.parse(text), strategy: importStrategy }),
                     })
                     const d = await res.json()
                     if (!res.ok) throw new Error()
+                    const r = d?.resolved
                     toast.success(
-                      `Imported: ${d?.imported?.favorites ?? 0} favorites, ${d?.imported?.playlists ?? 0} playlists`
+                      `Imported: ${d?.imported?.favorites ?? 0} favorites, ${d?.imported?.playlists ?? 0} playlists`,
+                      {
+                        description: r
+                          ? `Conflict rules applied: ${r.favoritesKept} favorites + ${r.playlistsKept} playlists kept from the cloud, ${r.playlistsAppended} playlists merged.`
+                          : undefined,
+                      }
                     )
                     useLibrary.getState().loadAll()
                     loadSync()
@@ -827,6 +1043,33 @@ export function SettingsView() {
                   }
                 }}
               />
+            </div>
+
+            {/* Day 28 — conflict rules for backup imports */}
+            <div className="rounded-xl bg-accent/30 p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <Label className="text-xs">Conflict rules (import backup)</Label>
+                  <p className="text-[11px] text-muted-foreground mt-0.5">
+                    Merge: imported data wins, same-name playlists skipped. Local wins: missing
+                    tracks are appended to same-name playlists. Cloud wins: existing cloud rows are
+                    never touched. Favorites/history always dedupe per song.
+                  </p>
+                </div>
+                <Select
+                  value={importStrategy}
+                  onValueChange={(v) => setImportStrategy(v as 'merge' | 'local' | 'cloud')}
+                >
+                  <SelectTrigger className="w-36" aria-label="Conflict strategy">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="merge">Merge (safe)</SelectItem>
+                    <SelectItem value="local">Local wins</SelectItem>
+                    <SelectItem value="cloud">Cloud wins</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="mt-1 rounded-xl bg-accent/30 p-3">
@@ -869,6 +1112,10 @@ export function SettingsView() {
               onCheckedChange={s.setAutoOfflineFavorites}
             />
           </div>
+
+          {/* Smart downloads (Day 23) — background sweep of favorites */}
+          <SmartDownloadsCard />
+
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"

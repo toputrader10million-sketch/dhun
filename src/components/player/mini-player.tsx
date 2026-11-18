@@ -68,7 +68,11 @@ export function MiniPlayer() {
   const showMiniArt = useSettings((s) => s.showMiniArt)
   const castAvailable = useCast((s) => s.available)
   const castConnected = useCast((s) => s.connected)
-  const castTrackId = useCast((s) => s.castTrackId)
+  // Day 32 fix: the store field is `trackId` (was `castTrackId` — never existed,
+  // so the cast icon could never highlight while casting).
+  const castTrackId = useCast((s) => s.trackId)
+  const castConnecting = useCast((s) => s.connecting)
+  const castDevice = useCast((s) => s.deviceName)
   const castCurrent = usePlayer((s) => s.castCurrent)
   const stopCast = useCast((s) => s.actions.stopCast)
   const downloaded = useOffline((s) => s.isDownloaded(current?.id ?? ''))
@@ -139,10 +143,26 @@ export function MiniPlayer() {
                     'inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95',
                     castConnected && castTrackId === current.id && 'text-primary'
                   )}
-                  aria-label={castConnected ? 'Disconnect cast' : 'Cast to device'}
-                  title={castConnected ? 'Disconnect cast' : 'Cast to device'}
+                  aria-label={
+                    castConnecting
+                      ? 'Opening cast device picker'
+                      : castConnected
+                        ? `Disconnect cast${castDevice ? ` from ${castDevice}` : ''}`
+                        : 'Cast to device'
+                  }
+                  title={
+                    castConnecting
+                      ? 'Connecting…'
+                      : castConnected
+                        ? `Casting${castDevice ? ` to ${castDevice}` : ''} — click to disconnect`
+                        : 'Cast to device'
+                  }
                 >
-                  <Cast className="h-4 w-4" />
+                  {castConnecting ? (
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                  ) : (
+                    <Cast className="h-4 w-4" />
+                  )}
                 </button>
               )}
               <button
@@ -197,7 +217,12 @@ export function MiniPlayer() {
             {/* Desktop extras */}
             <div className="hidden lg:flex items-center gap-1 shrink-0">
               {castConnected && (
-                <span className="text-[10px] font-medium uppercase tracking-wide text-primary">Casting</span>
+                <span
+                  className="text-[10px] font-medium uppercase tracking-wide text-primary"
+                  title={castDevice ? `Casting to ${castDevice}` : 'Casting'}
+                >
+                  {castDevice ? `→ ${castDevice}` : 'Casting'}
+                </span>
               )}
               <button
                 onClick={() => toggleFavorite(current)}

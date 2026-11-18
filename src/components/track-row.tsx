@@ -17,6 +17,7 @@ import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
 import { useOffline } from '@/store/offline'
+import { useUi } from '@/store/ui'
 import { shareTrack } from '@/lib/share'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -104,6 +105,8 @@ export const TrackRow = memo(function TrackRow({
   const removeOffline = useOffline((s) => s.remove)
 
   const fav = isFavorite(item.id)
+  const openArtist = useUi((s) => s.openArtist)
+  const isKnownArtist = item.artist && !/^unknown/i.test(item.artist) && item.artist.length < 80
 
   return (
     <div
@@ -139,10 +142,25 @@ export const TrackRow = memo(function TrackRow({
         <p className={cn('truncate text-sm font-medium', isCurrent && 'text-primary')}>
           {item.title}
         </p>
-        <p className="truncate text-xs text-muted-foreground">
-          {item.artist}
-          {showViews && item.views ? ` • ${formatViews(item.views)}` : ''}
-        </p>
+        {isKnownArtist ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation()
+              openArtist(item.artist)
+            }}
+            className="truncate max-w-full text-left text-xs text-muted-foreground hover:text-foreground hover:underline underline-offset-2"
+            aria-label={`Open artist page: ${item.artist}`}
+            title={`Open artist page: ${item.artist}`}
+          >
+            {item.artist}
+            {showViews && item.views ? ` • ${formatViews(item.views)}` : ''}
+          </button>
+        ) : (
+          <p className="truncate text-xs text-muted-foreground">
+            {item.artist}
+            {showViews && item.views ? ` • ${formatViews(item.views)}` : ''}
+          </p>
+        )}
       </div>
 
       {trailing}

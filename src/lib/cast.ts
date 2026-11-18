@@ -34,6 +34,10 @@ export interface CastItem {
 interface CastState {
   available: boolean // sender script loaded + receiver API supported
   connected: boolean // active receiver session
+  /** True while the device picker / session request is in flight (Day 32) */
+  connecting: boolean
+  /** Friendly name of the connected receiver, when the SDK exposes it (Day 32) */
+  deviceName: string | null
   trackId: string | null
   position: number // seconds
   duration: number // seconds
@@ -91,9 +95,16 @@ function setupCast() {
         state === framework.SessionState.SESSION_END_FAILED ||
         state === framework.SessionState.SESSION_STOPPED
       if (started) {
-        useCast.setState({ connected: true })
+        // Best-effort receiver name for the "Casting to …" UI (Day 32).
+        let deviceName: string | null = null
+        try {
+          const session = castContext.getCurrentSession()
+          const dev = session?.getCastDevice?.() ?? session?.castDevice ?? null
+          if (dev && typeof dev.friendlyName === 'string') deviceName = dev.friendlyName
+        } catch {}
+        useCast.setState({ connected: true, deviceName })
       } else if (ended) {
-        useCast.setState({ connected: false, trackId: null, paused: true, position: 0, duration: 0 })
+        useCast.setState({ connected: false, trackId: null, paused: true, position: 0, duration: 0, deviceName: null })
       }
     })
 
@@ -119,6 +130,8 @@ function setupCast() {
 export const useCast = create<CastState>((set, get) => ({
   available: false,
   connected: false,
+  connecting: false,
+  deviceName: null,
   trackId: null,
   position: 0,
   duration: 0,
@@ -166,6 +179,7 @@ export const useCast = create<CastState>((set, get) => ({
       const s = sdk()
       if (!s) return false
       const { framework, chromeCast } = s
+      set({ connecting: true })
       try {
         const castContext = framework.CastContext.getInstance()
         let session = castContext.getCurrentSession()
@@ -192,6 +206,8 @@ export const useCast = create<CastState>((set, get) => ({
         return true
       } catch {
         return false
+      } finally {
+        set({ connecting: false })
       }
     },
 
@@ -203,7 +219,7 @@ export const useCast = create<CastState>((set, get) => ({
           s.framework.CastContext.getInstance().getCurrentSession()?.endSession?.(true)
         } catch {}
       }
-      set({ connected: false, trackId: null, paused: true, position: 0, duration: 0 })
+      set({ connected: false, trackId: null, paused: true, position: 0, duration: 0, deviceName: null })
     },
 
     /** Play/pause toggle on the receiver (RemotePlayerController.playOrStop semantics). */

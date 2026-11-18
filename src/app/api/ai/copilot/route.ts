@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { ytMusicSearch } from '@/lib/ytmusic'
+import { cacheGet, cacheSet } from '@/lib/piped'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
+
+// Day 24 tuning: identical questions (same message + track + region) resolve
+// instantly from memory instead of paying the LLM + catalog round-trip again.
+const COPILOT_TTL = 5 * 60 * 1000
 
 /* ---------- Types ---------- */
 
@@ -45,6 +50,14 @@ Dhun is a free PWA music platform (no login, no ads). Features the user may ask 
 - Share: share button in Now Playing / track menus (share card image or text).
 - Keyboard shortcuts: "?" opens the help dialog; space play/pause, arrows seek/switch track, M mute, N next, P previous.
 - Queue: reorder by dragging in Now Playing → Up next; auto-mix keeps music going at queue end.
+- Artist pages: tap any artist name (track rows, cards, Now Playing) — top tracks, iTunes discography (albums & singles), Audius catalog.
+- EQ profiles: Settings → Equalizer — 10-band with a profile per source (All audio / YouTube / Audius / Jamendo). Audible in Hi-Fi mode and for Audius/Jamendo/offline; the YouTube embed plays flat.
+- Visualizer: Settings → Playback → Now Playing visualizer (Bars/Wave/Ring) — live audio data in Hi-Fi/Audius/offline playback only.
+- Smart downloads: Settings → Offline downloads — auto-caches favorites in the background with a Wi-Fi rule and a track cap.
+- Playlist import/export: playlist ⋮ menu → export JSON file or copy a DHUN1 share code; Library → Import recreates it.
+- Sync conflict rules: Settings → Cloud Sync → "Conflict rules" — Merge / Local wins / Cloud wins for backup imports.
+- Desktop widget: Settings → Playback — floating compact player with mini spectrum (desktop).
+- Handoff: Settings → "Continue on another device"; a resume toast appears automatically when another device sends you a queue.
 - Region: Settings → Music region affects charts/home feed and voice language.
 Answer with practical steps, be brief, and never invent features that are not listed.`
 
@@ -233,13 +246,21 @@ export async function POST(req: NextRequest) {
       : []
     const context = (body.context ?? {}) as CopilotContext
 
+    // Cache key: exact question + immediate conversational context.
+    const lastUser = [...history].reverse().find((t) => t.role === 'user')?.content ?? ''
+    const cacheKey = `copilot:${message.toLowerCase()}:${lastUser.toLowerCase().slice(0, 80)}:${context.currentTrack?.title ?? ''}:${context.region ?? ''}`
+    const cached = cacheGet<{ reply: string; searchQueries: string[]; chips: string[]; source: 'ai' | 'rules'; tracks: MusicItem[] }>(cacheKey)
+    if (cached) return NextResponse.json(cached)
+
     const llm = await planWithLLM(message, history, context)
     const plan: CopilotPlan = llm
       ? { ...llm, source: 'ai' }
       : planWithRules(message)
 
     const tracks = await resolveTracks(plan.searchQueries)
-    return NextResponse.json({ ...plan, tracks })
+    const out = { ...plan, tracks }
+    cacheSet(cacheKey, out, COPILOT_TTL)
+    return NextResponse.json(out)
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Copilot failed' },

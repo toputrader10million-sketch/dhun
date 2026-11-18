@@ -17,10 +17,14 @@ import { ChartsView } from '@/views/charts-view'
 import { LibraryView } from '@/views/library-view'
 import { NetworkView } from '@/views/network-view'
 import { SettingsView } from '@/views/settings-view'
+import { ArtistView } from '@/views/artist-view'
+import { DesktopWidget } from '@/components/player/desktop-widget'
+import { HandoffNudge } from '@/components/player/handoff-nudge'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
-import { useSettings, applyAccent } from '@/store/settings'
+import { useSettings, applyAccent, eqGainsFor } from '@/store/settings'
 import { useOffline } from '@/store/offline'
+import { useSmartDownloads } from '@/lib/smart-downloads'
 import { hifiEngine } from '@/engine/hifi'
 import { useCast } from '@/lib/cast'
 import { cn } from '@/lib/utils'
@@ -97,10 +101,18 @@ export function AppShell() {
     initPlayer()
   }, [initPlayer])
 
-  // Hydrate offline registry + cast framework once
+  // Hydrate offline registry + cast framework once; kick off smart downloads (Day 23)
   useEffect(() => {
     useOffline.getState().hydrate()
     useCast.getState().actions.init()
+    // Smart downloads: sweep favorites shortly after boot (throttled internally).
+    const bootTimer = setTimeout(() => void useSmartDownloads.getState().sweep('boot'), 6000)
+    const onOnline = () => void useSmartDownloads.getState().sweep('online')
+    window.addEventListener('online', onOnline)
+    return () => {
+      clearTimeout(bootTimer)
+      window.removeEventListener('online', onOnline)
+    }
   }, [])
 
   // Apply accent color (named palette, custom hex or gradient from the designer)
@@ -112,6 +124,13 @@ export function AppShell() {
   useEffect(() => {
     hifiEngine.setCrossfade(crossfade)
   }, [crossfade])
+
+  // Day 25: apply EQ profile changes live to the running Hi-Fi engine
+  const eqProfiles = useSettings((s) => s.eqProfiles)
+  const currentSource = usePlayer((s) => s.queue[s.index]?.source)
+  useEffect(() => {
+    hifiEngine.setEqGains(eqGainsFor(eqProfiles, currentSource))
+  }, [eqProfiles, currentSource])
 
   // Apply curated pro theme (CSS-variable set via <html data-app-theme>)
   useEffect(() => {
@@ -244,6 +263,7 @@ export function AppShell() {
                 {view === 'library' && <LibraryView />}
                 {view === 'network' && <NetworkView />}
                 {view === 'settings' && <SettingsView />}
+                {view === 'artist' && <ArtistView />}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -258,12 +278,17 @@ export function AppShell() {
         {/* Player chrome */}
         <MiniPlayer />
         <NowPlaying />
+        {/* Day 31 — floating desktop now-playing widget with mini spectrum */}
+        <DesktopWidget />
 
         {/* Keyboard shortcuts help dialog */}
         <ShortcutsDialog />
 
         {/* Dhun Copilot — AI assistant dock (Day 22) */}
         <CopilotDock />
+
+        {/* Day 32 — proactive handoff resume nudge */}
+        <HandoffNudge />
 
         {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav

@@ -523,6 +523,14 @@ class HifiEngine {
     this.analyser.getByteFrequencyData(arr)
     return arr
   }
+
+  /** Time-domain waveform for the wave visualizer (null when graph unavailable). */
+  getWave(): Uint8Array | null {
+    if (!this.analyser) return null
+    const arr = new Uint8Array(this.analyser.fftSize)
+    this.analyser.getByteTimeDomainData(arr)
+    return arr
+  }
 }
 
 export const hifiEngine = new HifiEngine()
