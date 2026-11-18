@@ -11,6 +11,7 @@ import {
   removeOffline,
   type OfflineTrack,
 } from '@/lib/offline'
+import { clientResolveAudio } from '@/lib/client-resolve'
 
 interface DownloadItem {
   id: string
@@ -57,9 +58,20 @@ export const useOffline = create<OfflineStore>((set, get) => ({
     if (get().isDownloading(trackId)) return false
     set((s) => ({ progress: { ...s.progress, [trackId]: { loaded: 0, total: null } } }))
     try {
+      // Day-1 offline repair: YouTube extraction from server IPs is blocked in
+      // 2025, so for YT tracks first try resolving FROM THE USER'S DEVICE via
+      // Piped (CORS-permissive) and download through our own validated proxy.
+      // Audius needs no resolution — the server proxy already works there.
+      let urlOverride: string | undefined
+      if ((source ?? 'yt') === 'yt') {
+        const resolved = await clientResolveAudio(trackId)
+        if (resolved) {
+          urlOverride = `/api/audio/${trackId}?upstream=${encodeURIComponent(resolved.upstreamUrl)}&ct=${encodeURIComponent(resolved.mimeType)}`
+        }
+      }
       const result = await addOffline(item, source ?? 'yt', (loaded, total) => {
         set((s) => ({ progress: { ...s.progress, [trackId]: { loaded, total } } }))
-      })
+      }, urlOverride)
       if (result.ok) {
         await get().refresh()
         toast.success('Available offline', { description: item.title.slice(0, 50) })

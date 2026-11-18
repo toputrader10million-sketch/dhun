@@ -1,0 +1,147 @@
+# Dhun — ৬০ দিনের প্রিমিয়াম রোডম্যাপ (PLAN-60)
+
+> লক্ষ্য: Dhun-কে ৬০ দিনে ধাপে ধাপে একটা **pro/premium-grade মিউজিক প্ল্যাটফর্ম** বানানো।
+> ক্যাডেন্স: **প্রতিদিন অন্তত ১টা shippable increment** — কোড → ব্রাউজার ভেরিফিকেশন → push → Vercel ডেপ্লয়। কোনো গ্যাপ নেই।
+
+---
+
+## ০. মূলনীতি (প্রতিদিনের কাজ এই ৫টা নিয়ম মানবে)
+
+1. **ইউজারের সমস্যা আগে**: প্রতিটা দিনের কাজ একটা বাস্তব সমস্যা সমাধান করবে (bug, ফ্রিকশন, ব্যথা) — "শুধু ফিচার" নয়।
+2. **গভীর বিশ্লেষণ আগে, কোড পরে**: প্রতিটা দিন শুরু হবে root-cause/usage বিশ্লেষণ দিয়ে।
+3. **শিপ করা না হলে দিন শেষ নয়**: lint + browser E2E + push + প্রোডাকশন যাচাই — সব সবুজ না হলে দিন শেষ হয় না।
+4. **সৎ ইউএক্স**: যা কাজ করে না, UI তা মিথ্যা বলবে না (যেমন YouTube extraction ব্লকড হলে স্পষ্ট বার্তা)।
+5. **ফ্রি ফান্ডামেন্ট**: সব ফিচার ফ্রি API দিয়ে; কোনো paid dependency নয়।
+
+---
+
+## ১. বর্তমান অবস্থা (Day 0 — গভীর বিশ্লেষণের সারাংশ)
+
+**ঠিক আছে**: iframe প্লেব্যাক (hd720 ফিক্স), Audius প্লেব্যাক+ডাউনলোড, Turso ক্লাউড সিঙ্ক, favorites/playlists/history, lyrics, থিম+accent, PWA ইনস্টল, queue reorder, MediaSession, offline banner, SW v4।
+
+**ভাঙা/অনুপস্থিত (আজকের বিশ্লেষণে ধরা পড়েছে)**:
+| সমস্যা | Root cause |
+|---|---|
+| YouTube গান ডাউনলোড হয় না | ২০২৫-এ Piped সব পাবলিক ইনস্ট্যান্সে audioStreams=0 (server+datacenter IP-তে YouTube extraction ব্লকড); innertube ANDROID/IOS client precondition-fail; WEB client "UNPLAYABLE"; Invidious সব ডেড |
+| Hi-Fi মোড YouTube-এ ফেল | একই resolver নির্ভরতা |
+| অফলাইন কোল্ড-স্টার্ট দুর্বল | SW শুধু manifest/icons precache করে — app shell '/' precache নেই |
+| অফলাইন ইউএক্স | অফলাইনে সাজেশন/সার্চ খালি স্টেট গাইড করে না |
+
+---
+
+## ২. ফেজ কাঠামো (৬০ দিন × ৮ ফেজ)
+
+### Phase A — Foundation & Reliability (Day 1–7)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 1 | D1 | **Offline/ডাউনলোড রিপেয়ার**: SW shell precache (v5), client-assisted Piped resolve (ইউজারের device IP থেকে), `/api/audio?upstream=` ভ্যালিডেটেড প্রক্সি, Audius download E2E ভেরিফাই, সৎ error toast |
+| 2 | D2 | Premium ভিজ্যুয়াল আইডেন্টিটি ফেজ-১: গ্লোবাল gradient/glass টোকেন, Now Playing আর্টওয়ার্ক ambient glow, স্মুথ transition |
+| 3 | D3 | Premium ভিজ্যুয়াল ফেজ-২: micro-interactions (hover/press), animated equalizer bars, স্কেলেটন পলিশ |
+| 4 | D4 | পারফরম্যান্স: bundle audit, ইমেজ lazy/size, ভিউ lazy-load, প্রথম রেন্ডার টাইম কমানো |
+| 5 | D5 | অ্যাকসেসিবিলিটি পাস: keyboard shortcuts (space/arrow/M), focus rings, ARIA অডিট |
+| 6 | D6 | রেজিলিয়েন্স: সব API graceful degradation + retry, অফলাইন empty-state গাইড |
+| 7 | D7 | উইক রিভিউ: Lighthouse পাস, বাগ বেইলআউট, ডক আপডেট |
+
+### Phase B — Premium Core (Day 8–14)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 8 | D8 | **Pro থিম ইঞ্জিন**: ৬+ কিউরেটেড প্রিমিয়াম থিম (Aurora, Sunset, Forest, Mono, Neon, Ocean-dawn) + থিম প্রিভিউ কার্ড |
+| 9 | D9 | Accent designer + custom gradient জেনারেটর |
+| 10 | D10 | অডিও পলিশ: crossfade, gapless tune, replay-gain স্টাইল normalization flag |
+| 11 | D11 | Sleep timer pro: fade-out, "গান শেষে" মোড, preset রিমাইন্ডার |
+| 12 | D12 | কারাওকে-স্টাইল lyrics (synced বড় ফন্ট মোড) + ফন্ট সাইজ কন্ট্রোল |
+| 13 | D13 | **Share/Charts (Dhun "cheers")**: Web Share API share-card, "Now playing" টেক্সট শেয়ার |
+| 14 | D14 | Charts পেজ: Audius trending + YouTube কিউরেটেড চার্ট, region ট্যাব |
+
+### Phase C — Smart/AI (Day 15–24)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 15 | D15 | AI DJ ফাউন্ডেশন: history-based পার্সোনাল "Daily Mix" কম্পোজার |
+| 16 | D16 | ন্যাচারাল ল্যাঙ্গুয়েজ সার্চ ("বৃষ্টির দিনে বাংলা গান") → LLM query plan |
+| 17 | D17 | Smart radio: mood/era/artist বেইজড ইনফিনিট queue |
+| 18 | D18 | Auto-mix: queue শেষে নিজে থেকে সিমিলার ট্র্যাক যোগ |
+| 19 | D19 | AI playlist builder: prompt → ২৫-গানের playlist (LLM + search pipeline) |
+| 20 | D20 | Smart home sections: টাইম-অব-ডে + আবহাওয়া-সচেতন কিউরেশন |
+| 21 | D21 | ভয়েস সার্চ (Web Speech API) |
+| 22 | D22 | "Dhun Copilot" — অ্যাপের ভেতরে AI সহায়ক (সাজেস্ট/সার্চ/সেটিংস গাইড) |
+| 23 | D23 | Smart downloads: ব্যাকগ্রাউন্ডে প্রিয় গান auto-cache (Wi-Fi বাস্তবায়ন নোটসহ) |
+| 24 | D24 | Phase C রিভিউ + টিউনিং |
+
+### Phase D — Pro Power Features (Day 25–33)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 25 | D25 | EQ প্রোফাইল সিস্টেম: preset (Vocal/Bass/Treble/Flat/Custom) + per-source |
+| 26 | D26 | Visualizer মোড ৩টা (bars/wave/ambient ring) |
+| 27 | D27 | Playlist import/export (JSON + shareable code) |
+| 28 | D28 | মাল্টি-ডিভাইস সিঙ্ক hardening: queue sync conflict rules |
+| 29 | D29 | Artist page (top tracks, related) |
+| 30 | D30 | Album/singles grouping (iTunes enrichment দিয়ে) |
+| 31 | D31 | Widgets: desktop mini spectrum + compact now-playing |
+| 32 | D32 | Cast/AirPlay polish + handoff UX |
+| 33 | D33 | Phase D রিভিউ |
+
+### Phase E — Content & Community (Day 34–42)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 34 | D34 | Public playlist share-links (read-only token URL) |
+| 35 | D35 | Trending charts by genre/region |
+| 36 | D36 | Curated editorial sections (Waves: Bangla/Bollywood/Punjabi/Global) |
+| 37 | D37 | Reaction/like analytics (anonymous aggregate) |
+| 38 | D38 | Discovery feed improvements |
+| 39 | D39 | Lyrics source expansion + বাংলা lyrics বিশেষ কেয়ার |
+| 40 | D40 | Onboarding tour (নতুন ইউজার ৩-স্টেপ গাইড) |
+| 41 | D41 | Empty-state সিস্টেম ইউনিফাই |
+| 42 | D42 | Phase E রিভিউ |
+
+### Phase F — Platform Depth (Day 43–50)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 43 | D43 | i18n ফাউন্ডেশন: বাংলা/English সুইচ |
+| 44 | D44 | বাংলা UI অনুবাদ সম্পূর্ণ |
+| 45 | D45 | PWA excellence: shortcuts, share target, protocol handler |
+| 46 | D46 | Install UX polish (custom install sheet) |
+| 47 | D47 | Performance budget enforcement (Lighthouse 90+ gate) |
+| 48 | D48 | Storage manager: cache quota UI, auto-evict LRU option |
+| 49 | D49 | Network health dashboard উন্নত (instance latency graph) |
+| 50 | D50 | Phase F রিভিউ |
+
+### Phase G — Dhun Premium টিয়ার (Day 51–57)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 51 | D51 | Premium টিয়ার ডিজাইন: কী কী Pro-তে যাবে (সব core ফ্রি থাকবে; Pro = থিম ইঞ্জিন, AI DJ, EQ pro, visualizer, cloud extras) |
+| 52 | D52 | Feature-flag সিস্টেম + Pro badge/upsell sheet |
+| 53 | D53 | Pro unlock মেকানিজম (ফ্রি-ফর-এখন: feedback/loyalty ভিত্তিক unlock কোড) |
+| 54 | D54 | Premium visual signature (Pro থিম + animated icon) |
+| 55 | D55 | Pro settings panel + usage stats ড্যাশবোর্ড |
+| 56 | D56 | Landing/about page premium রিডিজাইন |
+| 57 | D57 | পুরো অ্যাপ premium polish sweep |
+
+### Phase H — Launch & Hardening (Day 58–60)
+| Day | Task ID | কাজ |
+|---|---|---|
+| 58 | D58 | ফুল রিগ্রেশন পাস (সব গোল্ডেন পাথ) + বাগ ফিক্স |
+| 59 | D59 | Docs: README, PLAN-60 আপডেট, কমিউনিটি নোট |
+| 60 | D60 | **৬০-দিনের লঞ্চ রিভিউ** — মেট্রিক সামারি + পরবর্তী কোয়ার্টার প্ল্যান |
+
+---
+
+## ৩. প্রতিদিনের Quality Gate (কোনো ব্যতিক্রম নেই)
+
+1. `bun run lint` — শূন্য error
+2. Agent Browser E2E — দিনের ফিচার ব্রাউজারে প্রমাণিত
+3. dev.log — runtime error নেই
+4. Mobile + desktop responsive চেক
+5. Push GitHub → Vercel অটো-ডেপ্লয় → প্রোডাকশন URL-এ যাচাই
+
+## ৪. রিস্ক রেজিস্টার (আগে থেকে জানা)
+
+| রিস্ক | প্রতিকার |
+|---|---|
+| YouTube extraction পাবলিকলি ব্লকড (২০২৫) | iframe প্রিমারি প্লেব্যাক; ডাউনলোডে client-assisted resolve + Audius গ্যারান্টিড পাথ; সৎ মেসেজিং |
+| Piped instance churn | স্বয়ংক্রিয় health-check + /api/instances ড্যাশবোর্ড (আছে), নতুন instance সহজে যোগযোগযোগ |
+| Turso কোটা | local-first ডিজাইন (ইতিমধ্যে), ব্যাচ sync |
+| বড় AI ফিচারে লেটেন্সি | streaming response + ক্যাশ + skeleton UX |
+
+---
+
+> **Day 1 আজ শুরু** — Offline/ডাউনলোড রিপেয়ার (নিচে Day-1 সেকশন)।

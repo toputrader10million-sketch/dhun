@@ -1,6 +1,7 @@
 /* Dhun PWA Service Worker
  * Strategy:
- *  - Precache app shell ('/') + icons + manifest on install
+ *  - Precache app shell ('/' + icons + manifest) on install
+ *    (v5: shell is precached so a cold start with zero network still paints the app)
  *  - Cache-first: /_next/static/*, /icons/* (immutable, content-hashed build assets)
  *  - Network-first WITHOUT timeout (offline-only fallback): /api/* cacheable, navigations
  *    (A timeout fallback would serve stale HTML during slow dev/prod compiles)
@@ -22,7 +23,7 @@
  *  { type: 'OFFLINE_DELETED', url }
  *  { type: 'OFFLINE_CLEARED' }
  */
-const VERSION = 'dhun-v4'
+const VERSION = 'dhun-v5'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const API_CACHE = `${VERSION}-api`
@@ -36,6 +37,7 @@ const IS_DEV_HOST =
   self.location.hostname.endsWith('.localhost')
 
 const PRECACHE_URLS = [
+  '/', // app shell — enables true offline cold-start (first paint without network)
   '/manifest.webmanifest',
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -225,17 +227,61 @@ self.addEventListener('message', (event) => {
 
 /* ---------------- Audio fetch handling ---------------- */
 
-/** Only the initial 'bytes=0-' request is cache-servable; any other range is a seek. */
-function shouldBypassAudio(request) {
-  const range = request.headers.get('range')
-  return !!range && range !== 'bytes=0-'
+/*
+ * Offline audio serving:
+ *  - 'bytes=0-' (or no range): serve the cached full response when present.
+ *  - Any OTHER range (mid-track seek): if a cached copy exists, slice the
+ *    cached blob server-side (206) — offline-safe seeking. Otherwise pass the
+ *    ranged request straight to the network (native behavior when online).
+ *  - Cache miss → plain network passthrough. NO auto-caching here.
+ */
+function parseRange(range, size) {
+  const m = /^bytes=(\d*)-(\d*)$/.exec(range)
+  if (!m) return null
+  const [, a, b] = m
+  if (a === '' && b === '') return null
+  let start = 0
+  let end = 0
+  if (a === '') {
+    // suffix range: bytes=-N → last N bytes
+    const n = Math.min(Number(b), size)
+    start = Math.max(0, size - n)
+    end = size - 1
+  } else {
+    start = Number(a)
+    end = b === '' ? size - 1 : Math.min(Number(b), size - 1)
+  }
+  if (!Number.isFinite(start) || start > end || start >= size) return null
+  return { start, end }
 }
 
 async function serveAudio(request) {
   try {
     const audio = await caches.open(AUDIO_CACHE)
     const hit = await audio.match(request.url)
-    if (hit) return hit
+    if (hit) {
+      const range = request.headers.get('range')
+      if (!range || range === 'bytes=0-') return hit
+      // Offline-safe seeking: slice the cached blob instead of hitting the net.
+      try {
+        const size = Number(hit.headers.get('content-length')) || (await hit.clone().blob()).size
+        const part = parseRange(range, size)
+        if (part) {
+          const blob = await hit.blob()
+          const slice = blob.slice(part.start, part.end + 1)
+          return new Response(slice, {
+            status: 206,
+            headers: {
+              'Content-Type': hit.headers.get('content-type') || 'audio/mp4',
+              'Content-Length': String(slice.size),
+              'Content-Range': `bytes ${part.start}-${part.end}/${size}`,
+              'Accept-Ranges': 'bytes',
+            },
+          })
+        }
+      } catch {}
+      return hit // fall back to full response rather than fail
+    }
     // Cache miss → plain network passthrough. NO auto-caching here (explicit only).
     return await fetch(request)
   } catch {
@@ -256,9 +302,10 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url)
   if (url.origin !== self.location.origin) return // thumbnails/artwork from CDNs — bypass
 
-  // Offline audio: cache-first when explicitly downloaded; ranged seeks pass through.
+  // Offline audio: cache-first when explicitly downloaded; ranged seeks are
+  // sliced from the cached blob (offline-safe) or passed through when uncached.
   if (url.pathname.startsWith('/api/audio/') || url.pathname.startsWith('/api/audius/stream/')) {
-    if (!shouldBypassAudio(request)) event.respondWith(serveAudio(request))
+    event.respondWith(serveAudio(request))
     return
   }
 

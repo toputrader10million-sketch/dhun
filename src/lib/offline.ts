@@ -177,11 +177,16 @@ export async function sizeOfOffline(trackId: string): Promise<number> {
  * Download a track into the SW audio cache and register its metadata.
  * Progress is forwarded via onProgress(loaded, total|null). The listener is
  * attached before the OFFLINE_CACHE message is posted (no race).
+ *
+ * `urlOverride` lets the caller supply an already-resolved same-origin proxy
+ * URL (e.g. `/api/audio/<id>?upstream=…` from the client-assisted resolver);
+ * when omitted, the plain audioUrlFor(id) route is used.
  */
 export async function addOffline(
   item: AddOfflineItem,
   source: 'yt' | 'au',
-  onProgress?: (loaded: number, total: number | null) => void
+  onProgress?: (loaded: number, total: number | null) => void,
+  urlOverride?: string
 ): Promise<AddOfflineResult> {
   if (typeof window === 'undefined') return { ok: false, error: 'no-window' }
   try {
@@ -189,7 +194,7 @@ export async function addOffline(
     if (!worker) return { ok: false, error: 'no-sw' }
 
     const trackId = item.id
-    const url = audioUrlFor(trackId, source)
+    const url = urlOverride?.startsWith('/') ? urlOverride : audioUrlFor(trackId, source)
 
     // 1) Register the listener FIRST (progress/done/error race), 2) THEN post.
     const settled = new Promise<{ kind: 'done'; size: number } | { kind: 'error'; error: string }>(

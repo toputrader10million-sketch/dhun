@@ -51,7 +51,11 @@ export default function RegisterSW() {
     // registering in dev is safe — needed for offline-audio testing.
     if ('serviceWorker' in navigator) {
       const register = () => {
-        navigator.serviceWorker.register('/sw.js').catch(() => {})
+        // Never swallow registration errors — a broken sw.js silently kills
+        // offline downloads (no 'no-sw'-surfacing without this log).
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.error('[Dhun] Service worker registration failed:', err)
+        })
       }
       if (document.readyState === 'complete') register()
       else window.addEventListener('load', register, { once: true })

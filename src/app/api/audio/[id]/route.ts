@@ -4,12 +4,63 @@ import { pickAudioStream, proxyMediaResponse, resolveStreams } from '@/lib/strea
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// GET → same-origin YouTube audio proxy. Resolves an audio-only stream via the
-// shared Piped resolver, forwards the client's Range header upstream and pipes
-// the body straight through (no buffering). ?maxBitrate=<kbps> caps the stream.
+/**
+ * Allow-list for client-assisted upstream media URLs (?upstream=).
+ * The browser-side resolver (src/lib/client-resolve.ts) races Piped instances
+ * from the user's device and hands the winning googlevideo / instance-proxy
+ * URL here; we only proxy media hosts we know — never an arbitrary SSRF target.
+ */
+function isAllowedUpstream(raw: string): boolean {
+  try {
+    const u = new URL(raw)
+    if (u.protocol !== 'https:') return false
+    const h = u.hostname
+    return (
+      h.endsWith('.googlevideo.com') ||
+      h.includes('pipedproxy') ||
+      h.startsWith('proxy.piped') ||
+      h.endsWith('.odycdn.com')
+    )
+  } catch {
+    return false
+  }
+}
+
+// GET → same-origin YouTube audio proxy.
+//  Mode 1 (default): resolve an audio-only stream via the shared resolver and
+//                    pipe it through (?maxBitrate=<kbps> caps the stream).
+//  Mode 2 (?upstream=https://…): proxy a client-resolved media URL directly —
+//                    used by the offline download flow when server-side
+//                    extraction is blocked but the user's device succeeded.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   if (!id) return NextResponse.json({ error: 'Missing stream id' }, { status: 400 })
+
+  const upstreamRaw = req.nextUrl.searchParams.get('upstream')
+  if (upstreamRaw) {
+    if (!isAllowedUpstream(upstreamRaw)) {
+      return NextResponse.json(
+        { error: 'Upstream host not allowed', reason: 'upstream-not-allowed' },
+        { status: 400 }
+      )
+    }
+    const contentType = req.nextUrl.searchParams.get('ct') || 'audio/mp4'
+    try {
+      return await proxyMediaResponse(
+        upstreamRaw,
+        req.headers.get('range'),
+        contentType,
+        req.signal
+      )
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      // Expired signed URLs (~6h) land here — the client should re-resolve.
+      return NextResponse.json(
+        { error: `Upstream fetch failed: ${msg}`, reason: 'upstream-expired' },
+        { status: 502 }
+      )
+    }
+  }
 
   try {
     const resolved = await resolveStreams(id)
