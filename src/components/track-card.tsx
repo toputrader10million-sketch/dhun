@@ -2,6 +2,7 @@
 import { memo } from 'react'
 import { Play } from 'lucide-react'
 import { TrackImage } from './track-row'
+import { Skeleton } from '@/components/ui/skeleton'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { cn } from '@/lib/utils'
@@ -20,11 +21,11 @@ export const TrackCard = memo(function TrackCard({ item, context, size = 'md' }:
 
   return (
     <button
-      className={cn('group shrink-0 text-left', w)}
+      className={cn('group shrink-0 text-left transition-transform duration-150 ease-out active:scale-[0.97]', w)}
       onClick={() => playItem(item, context)}
       aria-label={`Play ${item.title}`}
     >
-      <div className="relative">
+      <div className="relative rounded-2xl transition-[transform,box-shadow] duration-200 ease-out group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-primary/10">
         <TrackImage item={item} className={cn('aspect-square w-full', w && 'w-full')} rounded="rounded-xl" />
         <div className="absolute bottom-2 right-2 rounded-full bg-primary text-primary-foreground p-2.5 shadow-lg opacity-0 translate-y-1 group-hover:opacity-100 group-hover:translate-y-0 transition-all">
           <Play className="h-4 w-4 fill-current" />
@@ -57,13 +58,13 @@ export function TrackCardRow({
   if (loading) {
     return (
       <section className="mb-8">
-        <div className="mb-3 h-5 w-40 rounded bg-muted animate-pulse" />
+        <Skeleton className="mb-3 h-5 w-40" />
         <div className="flex gap-4 overflow-hidden">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="w-36 sm:w-40 shrink-0">
-              <div className="aspect-square w-full rounded-xl bg-muted animate-pulse" />
-              <div className="mt-2 h-4 w-3/4 rounded bg-muted animate-pulse" />
-              <div className="mt-1 h-3 w-1/2 rounded bg-muted animate-pulse" />
+              <Skeleton className="aspect-square w-full rounded-xl" />
+              <Skeleton className="mt-2 h-4 w-3/4" />
+              <Skeleton className="mt-1 h-3 w-1/2" />
             </div>
           ))}
         </div>
@@ -78,7 +79,7 @@ export function TrackCardRow({
         {onPlayAll && (
           <button
             onClick={onPlayAll}
-            className="rounded-full bg-accent px-3 py-1 text-xs font-medium hover:bg-accent/80 transition-colors"
+            className="rounded-full bg-accent px-3 py-1 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-accent/80 active:scale-95"
           >
             Play all
           </button>

@@ -258,8 +258,11 @@ export function LibraryView() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {playlists.map((p) => (
                 <div key={p.id} className="group relative">
-                  <button className="w-full text-left" onClick={() => showDetail(p.id)}>
-                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-accent">
+                  <button
+                    className="w-full text-left transition-transform duration-150 ease-out active:scale-[0.97]"
+                    onClick={() => showDetail(p.id)}
+                  >
+                    <div className="relative aspect-square w-full overflow-hidden rounded-xl bg-accent transition-[transform,box-shadow] duration-200 ease-out group-hover:-translate-y-1 group-hover:shadow-xl group-hover:shadow-primary/10">
                       {p.cover ? (
                         <TrackImage item={{ artwork: p.cover, title: p.name }} className="h-full w-full" rounded="rounded-xl" />
                       ) : (
@@ -387,7 +390,8 @@ export function LibraryView() {
                     <p className="truncate text-xs text-muted-foreground">
                       {t.artist}
                       {t.size > 0 && ` • ${(t.size / (1024 * 1024)).toFixed(1)} MB`}
-                      {` • ${t.source === 'au' ? 'Audius' : 'YouTube'}`}
+                      {` • ${t.source === 'au' ? 'Audius' : t.source === 'jm' ? 'Jamendo' : 'YouTube'}`}
+                      {t.matchedVia && ` · matched from ${t.matchedVia === 'jm' ? 'Jamendo' : 'Audius'}`}
                     </p>
                   </div>
                   {prog && (

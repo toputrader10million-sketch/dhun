@@ -1,5 +1,5 @@
 // Shared types for Dhun music platform — DO NOT MODIFY without coordinating both frontend & backend
-export type TrackSource = 'yt' | 'au' // yt = YouTube (Piped), au = Audius
+export type TrackSource = 'yt' | 'au' | 'jm' // yt = YouTube (Piped/embed), au = Audius, jm = Jamendo (CC)
 
 export interface MusicItem {
   id: string // YouTube videoId (source='yt') or Audius track id (source='au')
@@ -12,6 +12,8 @@ export interface MusicItem {
   year?: string
   genre?: string
   source?: TrackSource // absent = legacy 'yt'
+  /** Audius: known-streamability flag (absent = unknown). Dead tracks excluded by Smart Match. */
+  streamable?: boolean
 }
 
 export type SearchFilter = 'music_songs' | 'videos' | 'albums' | 'artists' | 'playlists'

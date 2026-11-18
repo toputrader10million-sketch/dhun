@@ -2,6 +2,7 @@
 import { Pause, Play, SkipBack, SkipForward, Heart, ListMusic, Cast, Download, Loader2 } from 'lucide-react'
 import { Slider } from '@/components/ui/slider'
 import { TrackImage } from '@/components/track-row'
+import { EqBars } from '@/components/eq-bars'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
@@ -42,13 +43,13 @@ export function MiniPlayer() {
 
   return (
     <div
-      className="fixed inset-x-0 bottom-16 md:bottom-0 z-40 md:left-60 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80"
+      className="fixed inset-x-0 bottom-16 md:bottom-0 z-40 md:left-60 border-t dhun-glass-strong"
       role="region"
       aria-label="Player controls"
     >
       {/* progress line */}
       <div className="absolute top-0 left-0 h-0.5 bg-muted w-full">
-        <div className="h-full bg-primary transition-[width] duration-500" style={{ width: `${progress}%` }} />
+        <div className="h-full bg-gradient-to-r from-primary/55 to-primary transition-[width] duration-500" style={{ width: `${progress}%` }} />
       </div>
 
       <div className="flex items-center gap-2 sm:gap-3 px-3 py-2">
@@ -61,6 +62,7 @@ export function MiniPlayer() {
           {showMiniArt && (
             <TrackImage item={current} className="h-10 w-10" rounded="rounded-md" />
           )}
+          <EqBars paused={!isPlaying} className="shrink-0" />
           <div className="min-w-0">
             <p className="truncate text-sm font-medium leading-tight">{current.title}</p>
             <p className="truncate text-xs text-muted-foreground leading-tight">
@@ -78,7 +80,7 @@ export function MiniPlayer() {
                 else castCurrent()
               }}
               className={cn(
-                'inline-flex rounded-full p-2 hover:bg-accent',
+                'inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95',
                 castConnected && castTrackId === current.id && 'text-primary'
               )}
               aria-label={castConnected ? 'Disconnect cast' : 'Cast to device'}
@@ -91,7 +93,7 @@ export function MiniPlayer() {
             onClick={() => {
               if (!downloading && !downloaded) download(current, current.source === 'au' ? 'au' : 'yt')
             }}
-            className="inline-flex rounded-full p-2 hover:bg-accent"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95"
             aria-label={downloaded ? 'Downloaded for offline' : 'Download for offline'}
             title={
               downloaded
@@ -118,7 +120,7 @@ export function MiniPlayer() {
           </button>
           <button
             onClick={togglePlay}
-            className="rounded-full bg-primary text-primary-foreground p-2.5 hover:opacity-90 transition-opacity mx-1"
+            className="mx-1 inline-flex h-11 w-11 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md shadow-primary/25 transition-[transform,opacity] duration-150 hover:opacity-90 active:scale-90"
             aria-label={isPlaying ? 'Pause' : 'Play'}
           >
             {isPlaying ? (
@@ -129,7 +131,7 @@ export function MiniPlayer() {
           </button>
           <button
             onClick={next}
-            className="inline-flex rounded-full p-2 hover:bg-accent"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95"
             aria-label="Next track"
           >
             <SkipForward className="h-4 w-4 fill-current" />
@@ -143,14 +145,14 @@ export function MiniPlayer() {
           )}
           <button
             onClick={() => toggleFavorite(current)}
-            className="rounded-full p-2 hover:bg-accent"
+            className="rounded-full p-2 hover:bg-accent transition-[background-color,transform] duration-150 active:scale-95"
             aria-label="Toggle favorite"
           >
             <Heart className={cn('h-4 w-4', fav && 'fill-current text-primary')} />
           </button>
           <button
             onClick={openNowPlaying}
-            className="rounded-full p-2 hover:bg-accent"
+            className="rounded-full p-2 hover:bg-accent transition-[background-color,transform] duration-150 active:scale-95"
             aria-label="Open queue"
           >
             <ListMusic className="h-4 w-4" />

@@ -1,12 +1,14 @@
 'use client'
 import { useEffect, useSyncExternalStore } from 'react'
 import { ThemeProvider } from 'next-themes'
-import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower } from 'lucide-react'
+import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower, Keyboard } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
 import { MiniPlayer } from '@/components/player/mini-player'
 import { NowPlaying } from '@/components/player/now-playing'
 import { VideoBubble } from '@/components/player/video-bubble'
+import { ShortcutsDialog, useShortcutsDialog } from '@/components/shortcuts-dialog'
+import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { HomeView } from '@/views/home-view'
 import { ExploreView } from '@/views/explore-view'
 import { LibraryView } from '@/views/library-view'
@@ -16,6 +18,7 @@ import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
 import { useSettings, applyAccent } from '@/store/settings'
 import { useOffline } from '@/store/offline'
+import { hifiEngine } from '@/engine/hifi'
 import { useCast } from '@/lib/cast'
 import { cn } from '@/lib/utils'
 
@@ -51,13 +54,34 @@ function OfflineBanner() {
   )
 }
 
+function ShortcutsButton() {
+  const setOpen = useShortcutsDialog((s) => s.setOpen)
+  return (
+    <button
+      onClick={() => setOpen(true)}
+      className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground transition-colors hover:bg-accent/60 hover:text-foreground"
+      aria-haspopup="dialog"
+      aria-label="Keyboard shortcuts"
+    >
+      <Keyboard className="h-3.5 w-3.5" aria-hidden="true" /> Keyboard shortcuts
+    </button>
+  )
+}
+
 export function AppShell() {
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
   const goSearch = useUi((s) => s.goSearch)
   const initPlayer = usePlayer((s) => s.init)
   const accent = useSettings((s) => s.accent)
+  const customAccent = useSettings((s) => s.customAccent)
+  const accentGradient = useSettings((s) => s.accentGradient)
+  const appTheme = useSettings((s) => s.appTheme)
+  const crossfade = useSettings((s) => s.crossfade)
   const region = useSettings((s) => s.region)
+
+  // Global keyboard shortcuts (playback, navigation, help dialog)
+  useKeyboardShortcuts()
 
   // Init engines + media session once
   useEffect(() => {
@@ -70,10 +94,20 @@ export function AppShell() {
     useCast.getState().actions.init()
   }, [])
 
-  // Apply accent color
+  // Apply accent color (named palette, custom hex or gradient from the designer)
   useEffect(() => {
-    applyAccent(accent)
-  }, [accent])
+    applyAccent(accent, customAccent, accentGradient)
+  }, [accent, customAccent, accentGradient])
+
+  // Apply crossfade window to the Hi-Fi engine
+  useEffect(() => {
+    hifiEngine.setCrossfade(crossfade)
+  }, [crossfade])
+
+  // Apply curated pro theme (CSS-variable set via <html data-app-theme>)
+  useEffect(() => {
+    document.documentElement.dataset.appTheme = appTheme
+  }, [appTheme])
 
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
@@ -90,7 +124,7 @@ export function AppShell() {
             aria-label="Dhun home"
           >
             <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-              <AudioWaveform className="h-5 w-5" />
+              <AudioWaveform className="h-5 w-5" aria-hidden="true" />
             </span>
             <span>
               <span className="block text-lg font-extrabold leading-none tracking-tight">Dhun</span>
@@ -108,16 +142,17 @@ export function AppShell() {
                 )}
                 aria-current={view === n.id ? 'page' : undefined}
               >
-                <n.icon className="h-4.5 w-4.5" /> {n.label}
+                <n.icon className="h-4.5 w-4.5" aria-hidden="true" /> {n.label}
               </button>
             ))}
           </nav>
+          <ShortcutsButton />
           <button
             onClick={() => goSearch()}
             className="mt-4 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground hover:bg-accent/60 hover:text-foreground transition-colors"
           >
-            <Home className="hidden" />
-            <Compass className="h-4.5 w-4.5" /> Search anything…
+            <Home className="hidden" aria-hidden="true" />
+            <Compass className="h-4.5 w-4.5" aria-hidden="true" /> Search anything…
           </button>
           <div className="mt-auto px-2 text-[11px] leading-relaxed text-muted-foreground">
             <p className="font-medium text-foreground/80">Built on free APIs</p>
@@ -131,7 +166,7 @@ export function AppShell() {
           <header className="sticky top-0 z-40 flex items-center justify-between border-b bg-background/95 backdrop-blur px-4 py-3 md:hidden">
             <button className="flex items-center gap-2" onClick={() => setView('home')} aria-label="Dhun home">
               <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <AudioWaveform className="h-4.5 w-4.5" />
+                <AudioWaveform className="h-4.5 w-4.5" aria-hidden="true" />
               </span>
               <span className="text-lg font-extrabold tracking-tight">Dhun</span>
             </button>
@@ -140,7 +175,7 @@ export function AppShell() {
               className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground"
               aria-label="Search"
             >
-              <Compass className="h-4 w-4" /> Search
+              <Compass className="h-4 w-4" aria-hidden="true" /> Search
             </button>
           </header>
 
@@ -163,6 +198,9 @@ export function AppShell() {
         <MiniPlayer />
         <NowPlaying />
 
+        {/* Keyboard shortcuts help dialog */}
+        <ShortcutsDialog />
+
         {/* Mobile bottom nav */}
         <nav
           className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background/95 backdrop-blur md:hidden pb-safe"
@@ -178,7 +216,7 @@ export function AppShell() {
               )}
               aria-current={view === n.id ? 'page' : undefined}
             >
-              <n.icon className={cn('h-5 w-5', view === n.id && 'fill-accent')} />
+              <n.icon className={cn('h-5 w-5', view === n.id && 'fill-accent')} aria-hidden="true" />
               {n.label}
             </button>
           ))}

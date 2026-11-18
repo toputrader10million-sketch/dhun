@@ -411,28 +411,32 @@ export function NowPlaying() {
             </div>
           </div>
 
-          {/* artwork */}
-          <div className="relative mx-auto mt-4 w-[min(56vw,300px)] aspect-square shrink-0 overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-primary/20">
-            {artSrc ? (
-              <img
-                src={artSrc}
-                alt={current.title}
-                onError={() => setArtStage((s) => s + 1)}
-                className={cn(
-                  'h-full w-full object-cover transition-transform duration-700',
-                  isPlaying ? 'scale-100' : 'scale-95'
-                )}
-              />
-            ) : (
-              <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                <AudioWaveform className="h-10 w-10" />
-              </div>
-            )}
-            {isBuffering && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                <Loader2 className="h-8 w-8 animate-spin text-white" />
-              </div>
-            )}
+          {/* artwork + accent-tinted ambient glow */}
+          <div className="relative mx-auto mt-6 w-[min(56vw,300px)] shrink-0">
+            {/* soft radial halo behind the sleeve — static blur, transform-only animation */}
+            <div className="dhun-ambient-glow" aria-hidden />
+            <div className="relative aspect-square overflow-hidden rounded-2xl bg-muted shadow-2xl shadow-primary/20">
+              {artSrc ? (
+                <img
+                  src={artSrc}
+                  alt={current.title}
+                  onError={() => setArtStage((s) => s + 1)}
+                  className={cn(
+                    'h-full w-full object-cover transition-transform duration-700',
+                    isPlaying ? 'scale-100' : 'scale-95'
+                  )}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-muted-foreground">
+                  <AudioWaveform className="h-10 w-10" />
+                </div>
+              )}
+              {isBuffering && (
+                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                  <Loader2 className="h-8 w-8 animate-spin text-white" />
+                </div>
+              )}
+            </div>
           </div>
           <Visualizer />
 
@@ -446,7 +450,7 @@ export function NowPlaying() {
               onClick={() => {
                 if (!downloading && !downloaded) download(current, current.source === 'au' ? 'au' : 'yt')
               }}
-              className="rounded-full p-2 hover:bg-accent shrink-0"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
               aria-label={downloaded ? 'Downloaded for offline' : 'Download for offline'}
               title={downloaded ? 'Available offline' : 'Download for offline'}
             >
@@ -464,7 +468,7 @@ export function NowPlaying() {
                   if (casting) stopCast()
                   else castCurrent()
                 }}
-                className={cn('rounded-full p-2 hover:bg-accent shrink-0', casting && 'text-primary')}
+                className={cn('inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0', casting && 'text-primary')}
                 aria-label={casting ? 'Disconnect cast' : 'Cast to device'}
                 title={casting ? 'Disconnect cast' : 'Cast to device'}
               >
@@ -484,7 +488,7 @@ export function NowPlaying() {
                   })
                 }
               }}
-              className="rounded-full p-2 hover:bg-accent shrink-0"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
               aria-label="Share this song"
               title="Share this song"
             >
@@ -492,7 +496,7 @@ export function NowPlaying() {
             </button>
             <button
               onClick={() => toggleFavorite(current)}
-              className="rounded-full p-2 hover:bg-accent shrink-0"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
               aria-label="Toggle favorite"
             >
               <Heart className={cn('h-5 w-5', fav && 'fill-current text-primary')} />
@@ -518,14 +522,17 @@ export function NowPlaying() {
           <div className="mt-3 flex items-center justify-center gap-3 px-6" aria-label="Playback controls">
             <button
               onClick={toggleShuffle}
-              className={cn('rounded-full p-2.5 hover:bg-accent', shuffle && 'text-primary')}
+              className={cn(
+                'inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90',
+                shuffle && 'text-primary'
+              )}
               aria-label="Toggle shuffle"
             >
               <Shuffle className="h-5 w-5" />
             </button>
             <button
               onClick={prev}
-              className="rounded-full p-2.5 hover:bg-accent"
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90"
               aria-label="Previous track"
             >
               <SkipBack className="h-6 w-6 fill-current" />
@@ -544,12 +551,19 @@ export function NowPlaying() {
                 <Play className="h-7 w-7 fill-current ml-0.5" />
               )}
             </button>
-            <button onClick={next} className="rounded-full p-2.5 hover:bg-accent" aria-label="Next track">
+            <button
+              onClick={next}
+              className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90"
+              aria-label="Next track"
+            >
               <SkipForward className="h-6 w-6 fill-current" />
             </button>
             <button
               onClick={cycleRepeat}
-              className={cn('rounded-full p-2.5 hover:bg-accent', repeat !== 'off' && 'text-primary')}
+              className={cn(
+                'inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90',
+                repeat !== 'off' && 'text-primary'
+              )}
               aria-label={`Repeat mode: ${repeat}`}
             >
               {repeat === 'one' ? (

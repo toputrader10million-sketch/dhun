@@ -86,6 +86,12 @@ class HifiEngine {
   private events: EngineEvents = {}
   private volume = 100
   private srcToken = 0 // guards stale loadedmetadata one-shots across src swaps
+  // Crossfade (Day-10): fade-out the ending track over its final seconds,
+  // fade-in the next one. 0 = off. Works on both the Web Audio gain node and
+  // plain element volume (when the EQ graph is unavailable).
+  private fadeSec = 0
+  private fading = false
+  private fadeRaf = 0
   public active = false // true when this engine currently drives playback
 
   setEvents(e: EngineEvents) {
@@ -98,7 +104,14 @@ class HifiEngine {
       if (isActive()) this.events.onState?.('ended')
     })
     a.addEventListener('playing', () => {
-      if (isActive()) this.events.onState?.('playing')
+      if (isActive()) {
+        if (this.fadeSec > 0) {
+          // fade-in the new track (also restores gain after a fade-out)
+          this.fading = false
+          this.fadeTo(this.volume / 100, 700)
+        }
+        this.events.onState?.('playing')
+      }
     })
     // Chrome fires 'pause' right before 'ended' — don't flash a paused state.
     a.addEventListener('pause', () => {
@@ -108,7 +121,20 @@ class HifiEngine {
       if (isActive()) this.events.onState?.('buffering')
     })
     a.addEventListener('timeupdate', () => {
-      if (isActive() && Number.isFinite(a.duration)) this.events.onTime?.(a.currentTime, a.duration || 0)
+      if (isActive() && Number.isFinite(a.duration)) {
+        this.events.onTime?.(a.currentTime, a.duration || 0)
+        if (
+          this.fadeSec > 0 &&
+          a.duration > this.fadeSec + 1 &&
+          !this.fading &&
+          !a.paused &&
+          a.duration - a.currentTime <= this.fadeSec
+        ) {
+          this.fading = true
+          const remaining = Math.max(300, (a.duration - a.currentTime) * 1000)
+          this.fadeTo(0, remaining)
+        }
+      }
     })
     a.addEventListener('error', () => {
       if (isActive()) {
@@ -119,6 +145,36 @@ class HifiEngine {
         this.clearStandby()
       }
     })
+  }
+
+  /** Configure the crossfade window (seconds; 0 disables). */
+  setCrossfade(seconds: number) {
+    this.fadeSec = Math.max(0, Math.min(seconds, 12))
+    if (this.fadeSec === 0 && this.fading) {
+      this.fading = false
+      this.fadeTo(this.volume / 100, 300)
+    }
+  }
+
+  /** Tween engine loudness to `target01` over `ms`. Gain node when graphed, else element volume. */
+  private fadeTo(target01: number, ms: number) {
+    cancelAnimationFrame(this.fadeRaf)
+    const a = this.audio
+    if (!a) return
+    const useGain = !!(this.ctx && this.gain && this.graphed.has(a))
+    const start = useGain ? this.gain!.gain.value : a.volume
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / ms)
+      const v = Math.max(0, Math.min(1, start + (target01 - start) * p))
+      if (useGain && this.ctx) {
+        this.gain!.gain.value = v
+      } else {
+        a.volume = v
+      }
+      if (p < 1) this.fadeRaf = requestAnimationFrame(step)
+    }
+    this.fadeRaf = requestAnimationFrame(step)
   }
 
   private makeElement(): HTMLAudioElement {
@@ -419,7 +475,14 @@ class HifiEngine {
   }
 
   seek(seconds: number) {
-    if (this.audio) this.audio.currentTime = seconds
+    if (this.audio) {
+      this.audio.currentTime = seconds
+      // Seeking out of the end zone cancels an in-progress fade-out.
+      if (this.fading) {
+        this.fading = false
+        this.fadeTo(this.volume / 100, 400)
+      }
+    }
   }
 
   setVolume(percent: number) {

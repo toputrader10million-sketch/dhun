@@ -69,6 +69,7 @@ function mapTrack(t: Record<string, unknown>): MusicItem | null {
     views: typeof t.play_count === 'number' ? t.play_count : undefined,
     source: 'au',
     genre: typeof t.genre === 'string' && t.genre ? t.genre : undefined,
+    streamable: typeof t.is_streamable === 'boolean' ? t.is_streamable : undefined,
   }
 }
 

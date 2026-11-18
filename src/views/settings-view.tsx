@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTheme } from 'next-themes'
 import {
   Activity,
+  Check,
   Download,
   Equal,
   Globe,
@@ -10,6 +11,8 @@ import {
   Loader2,
   Monitor,
   Moon,
+  Palette,
+  Plus,
   RadioTower,
   Sun,
   Trash2,
@@ -38,7 +41,15 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { toast } from 'sonner'
-import { useSettings, EQ_PRESETS, applyAccent, type AccentColor, type EqPreset } from '@/store/settings'
+import {
+  useSettings,
+  EQ_PRESETS,
+  APP_THEMES,
+  ACCENT_GRADIENTS,
+  applyAccent,
+  type AccentColor,
+  type EqPreset,
+} from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
 import { useUi } from '@/store/ui'
@@ -120,8 +131,8 @@ export function SettingsView() {
   }, [])
 
   useEffect(() => {
-    applyAccent(s.accent)
-  }, [s.accent])
+    applyAccent(s.accent, s.customAccent, s.accentGradient)
+  }, [s.accent, s.customAccent, s.accentGradient])
 
   const loadSync = () => {
     setSyncLoading(true)
@@ -207,6 +218,58 @@ export function SettingsView() {
               </>
             )}
           </div>
+        </div>
+      </section>
+
+      {/* Themes (pro theme engine) — above the accent controls */}
+      <section aria-label="Themes" className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+          <Palette className="h-4 w-4 text-primary" /> Themes
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">
+          Curated dark-tuned looks — applied instantly. Your accent color stays on top.
+        </p>
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          {APP_THEMES.map((t) => {
+            const active = s.appTheme === t.id
+            return (
+              <button
+                key={t.id}
+                onClick={() => s.setAppTheme(t.id)}
+                className={cn(
+                  'rounded-xl border p-2 text-left transition-colors',
+                  active
+                    ? 'border-primary bg-accent/40 ring-2 ring-primary/50'
+                    : 'hover:bg-accent/40'
+                )}
+                aria-label={`Theme ${t.name}${active ? ' (selected)' : ''}`}
+                aria-pressed={active}
+                title={t.description}
+              >
+                {/* Mini mockup painted from the theme's preview colors */}
+                <div
+                  className="rounded-lg p-2.5"
+                  style={{ backgroundColor: t.from }}
+                  aria-hidden
+                >
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: t.to }} />
+                    <span className="h-1.5 w-12 rounded-full bg-white/25" />
+                  </div>
+                  <span className="mb-1.5 block h-1.5 w-3/4 rounded-full bg-white/15" />
+                  <span className="mb-2 block h-1.5 w-1/2 rounded-full bg-white/10" />
+                  <div className="flex gap-1.5">
+                    <span className="h-2.5 w-7 rounded-full" style={{ backgroundColor: t.to }} />
+                    <span className="h-2.5 w-7 rounded-full bg-white/15" />
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center justify-between gap-1 px-0.5">
+                  <span className="truncate text-xs font-medium">{t.name}</span>
+                  {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />}
+                </div>
+              </button>
+            )
+          })}
         </div>
       </section>
 
@@ -300,6 +363,89 @@ export function SettingsView() {
               )}
             </div>
           </div>
+          {/* Accent designer (Day 9): custom color picker + gradient presets */}
+          <div className="space-y-3 rounded-xl border bg-accent/20 p-3">
+            <div className="flex items-center justify-between gap-4">
+              <div className="min-w-0">
+                <Label htmlFor="custom-accent" className="text-xs">
+                  Custom accent
+                </Label>
+                <p className="text-xs text-muted-foreground">
+                  Pick any color — shades adapt to light/dark automatically.
+                </p>
+              </div>
+              <div className="flex items-center gap-2">
+                {s.customAccent && (
+                  <button
+                    onClick={() => s.setCustomAccent(null)}
+                    className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    aria-label="Reset custom accent"
+                  >
+                    Reset
+                  </button>
+                )}
+                <label
+                  className={cn(
+                    'relative block h-7 w-7 cursor-pointer rounded-full ring-2 ring-offset-2 ring-offset-background transition-all',
+                    s.customAccent ? 'ring-foreground' : 'ring-transparent hover:ring-muted-foreground/40'
+                  )}
+                  style={s.customAccent ? { backgroundColor: s.customAccent } : undefined}
+                  title="Custom accent"
+                >
+                  {!s.customAccent && (
+                    <span
+                      className="pointer-events-none absolute inset-0 flex items-center justify-center rounded-full bg-gradient-to-br from-rose-500 via-amber-400 to-emerald-400"
+                      aria-hidden
+                    >
+                      <Plus className="h-3.5 w-3.5 text-white/90 drop-shadow" />
+                    </span>
+                  )}
+                  <input
+                    id="custom-accent"
+                    type="color"
+                    value={s.customAccent ?? '#f43f5e'}
+                    onChange={(e) => s.setCustomAccent(e.target.value)}
+                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                    aria-label="Custom accent color"
+                  />
+                </label>
+              </div>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+              <div className="min-w-0">
+                <Label className="text-xs">Gradient presets</Label>
+                <p className="text-xs text-muted-foreground">Two-tone accents blended across the UI.</p>
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {ACCENT_GRADIENTS.map((g) => {
+                  const on = s.accentGradient?.from === g.from && s.accentGradient?.to === g.to
+                  return (
+                    <button
+                      key={g.id}
+                      onClick={() => s.setAccentGradient({ from: g.from, to: g.to })}
+                      className={cn(
+                        'h-7 w-11 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all',
+                        on ? 'ring-foreground' : 'ring-transparent hover:ring-muted-foreground/40'
+                      )}
+                      style={{ backgroundImage: `linear-gradient(135deg, ${g.from}, ${g.to})` }}
+                      aria-label={`Gradient accent ${g.label}`}
+                      aria-pressed={on}
+                      title={g.label}
+                    />
+                  )
+                })}
+                {s.accentGradient && (
+                  <button
+                    onClick={() => s.setAccentGradient(null)}
+                    className="text-[10px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                    aria-label="Reset gradient accent"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -337,6 +483,29 @@ export function SettingsView() {
               </p>
             </div>
             <Switch id="gapless-toggle" checked={s.gaplessPlayback} onCheckedChange={s.setGaplessPlayback} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="crossfade-select">Crossfade</Label>
+              <p className="text-xs text-muted-foreground">
+                Fades the ending track out and the next one in — smooth radio-style transitions in Hi-Fi mode.
+              </p>
+            </div>
+            <Select
+              value={String(s.crossfade)}
+              onValueChange={(v) => s.setCrossfade(Number(v))}
+            >
+              <SelectTrigger id="crossfade-select" className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">Off</SelectItem>
+                <SelectItem value="2">2s</SelectItem>
+                <SelectItem value="4">4s</SelectItem>
+                <SelectItem value="6">6s</SelectItem>
+                <SelectItem value="8">8s</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>

@@ -13,6 +13,7 @@ import {
 } from '@/engine/media-session'
 import { useSettings } from './settings'
 import { useOffline } from './offline'
+import { useKeys } from './keys'
 import { audioUrlFor } from '@/lib/offline'
 import { useCast } from '@/lib/cast'
 import type { AudioStream } from '@/lib/types'
@@ -49,6 +50,11 @@ interface PlayerState {
   setVolume: (v: number) => void
   toggleShuffle: () => void
   cycleRepeat: () => void
+  /** Relative seek from the current position (seconds, may be negative). */
+  seekBy: (delta: number) => void
+  /** Mute / unmute. Remembers the pre-mute volume and restores it on unmute. */
+  toggleMute: () => void
+  muted: boolean
   startRadio: () => Promise<void>
   castCurrent: () => Promise<boolean>
   resumeHandoff: (opts: {
@@ -76,6 +82,10 @@ function resolveAudioUrl(item: MusicItem): string | null {
     if (u) return u
   }
   if (item.source === 'au') return `/api/audius/stream/${item.id}`
+  if (item.source === 'jm') {
+    const key = useKeys.getState().jamendoKey
+    return `/api/jamendo/stream/${item.id}${key ? `?key=${encodeURIComponent(key)}` : ''}`
+  }
   if (useSettings.getState().playbackMode === 'hifi') return `/api/audio/${item.id}`
   return null
 }
@@ -117,6 +127,8 @@ function shuffleIndices(len: number, first: number): number[] {
 
 let initialized = false
 let consecutiveErrors = 0
+/** Volume to restore when unmuting (not part of persisted state). */
+let preMuteVolume = 80
 
 export const usePlayer = create<PlayerState>()(
   persist(
@@ -220,7 +232,34 @@ export const usePlayer = create<PlayerState>()(
           }
         }
 
-        // 2) Audius tracks stream via our same-origin proxy (EQ-capable)
+        // 2) Jamendo tracks stream via our same-origin proxy (CC-licensed mp3)
+        if (item.source === 'jm') {
+          const key = useKeys.getState().jamendoKey
+          set({ hifiActive: true })
+          const ok = await hifiEngine.playUrl(
+            `/api/jamendo/stream/${item.id}${key ? `?key=${encodeURIComponent(key)}` : ''}`,
+            startSeconds,
+            { watchdogMs: 10000 }
+          )
+          if (ok) {
+            set({ isBuffering: false, loadingTrackId: null, embedMode: false })
+            schedulePreload()
+            sideEffects(item)
+            return
+          }
+          set({ hifiActive: false })
+          stopLocalEngines()
+          set({ isBuffering: false, loadingTrackId: null, isPlaying: false })
+          setMediaPlaybackState('paused')
+          toast.error('Jamendo stream unavailable', {
+            description: key
+              ? item.title.slice(0, 48)
+              : 'Add your free Jamendo key in Explore to play Jamendo tracks.',
+          })
+          return
+        }
+
+        // 3) Audius tracks stream via our same-origin proxy (EQ-capable)
         if (item.source === 'au') {
           set({ hifiActive: true })
           const ok = await hifiEngine.playUrl(`/api/audius/stream/${item.id}`, startSeconds, {
@@ -323,6 +362,7 @@ export const usePlayer = create<PlayerState>()(
         embedMode: false,
         hiResArt: null,
         loadingTrackId: null,
+        muted: false,
 
         init: () => {
           if (initialized || typeof window === 'undefined') return
@@ -616,7 +656,38 @@ export const usePlayer = create<PlayerState>()(
             useCast.getState().actions.setVolumeRemote(vol)
             return
           }
+          // Hi-Fi engine previously ignored volume changes — apply it so the
+          // volume shortcuts work in direct-stream mode too.
+          if (get().hifiActive) hifiEngine.setVolume(vol)
           youtubeEngine.setVolume(vol)
+        },
+
+        seekBy: (delta) => {
+          const s = get()
+          // Prefer the live engine clock in Hi-Fi mode; the store position is
+          // the last timeupdate snapshot and can lag by a second.
+          const cur = s.hifiActive ? hifiEngine.getTime() : s.position
+          const dur = s.duration > 0 ? s.duration : s.hifiActive ? hifiEngine.getDuration() : 0
+          let target = cur + delta
+          if (target < 0) target = 0
+          if (dur > 0 && target > dur) target = Math.max(0, dur - 0.5)
+          get().seek(target)
+        },
+
+        toggleMute: () => {
+          const s = get()
+          const castConnected = useCast.getState().connected
+          if (s.muted) {
+            const restore = preMuteVolume > 0 ? preMuteVolume : Math.max(useSettings.getState().volume, 10)
+            set({ muted: false })
+            get().setVolume(restore)
+            if (s.hifiActive && !castConnected) hifiEngine.setVolume(restore)
+          } else {
+            preMuteVolume = useSettings.getState().volume
+            set({ muted: true })
+            get().setVolume(0)
+            if (s.hifiActive && !castConnected) hifiEngine.setVolume(0)
+          }
         },
 
         toggleShuffle: () => {

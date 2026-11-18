@@ -83,21 +83,30 @@ export function HomeView({ region }: { region?: string }) {
 
   return (
     <div className="px-4 sm:px-6 py-4">
-      {/* greeting */}
-      <div className="mb-6 flex items-start justify-between gap-3">
-        <div>
-          <p className="text-xs text-muted-foreground mb-1">Dhun • free music, your way</p>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight" suppressHydrationWarning>
-            {greeting()}
-            <span className="ml-2 text-primary">♪</span>
-          </h1>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Search any song from YouTube&apos;s catalog — no ads, no login, works offline too.
-          </p>
+      {/* greeting (with accent aura + gradient title) */}
+      <div className="relative mb-6">
+        <div aria-hidden className="dhun-header-aura pointer-events-none absolute -inset-x-4 -top-10 -bottom-4" />
+        <div className="relative flex items-start justify-between gap-3">
+          <div>
+            <p className="text-xs text-muted-foreground mb-1">Dhun • free music, your way</p>
+            <h1 className="dhun-gradient-text text-2xl sm:text-3xl font-extrabold tracking-tight" suppressHydrationWarning>
+              {greeting()}
+              <span className="ml-2 text-primary">♪</span>
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Search any song from YouTube&apos;s catalog — no ads, no login, works offline too.
+            </p>
+          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={refresh}
+            aria-label="Refresh feed"
+            className="shrink-0 transition-[background-color,transform] duration-150 active:scale-90"
+          >
+            <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
+          </Button>
         </div>
-        <Button variant="ghost" size="icon" onClick={refresh} aria-label="Refresh feed" className="shrink-0">
-          <RefreshCw className={refreshing ? 'h-4 w-4 animate-spin' : 'h-4 w-4'} />
-        </Button>
       </div>
 
       {loading && (

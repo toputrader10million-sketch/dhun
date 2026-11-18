@@ -15,7 +15,7 @@
 
 export interface OfflineTrack {
   trackId: string
-  source: 'yt' | 'au'
+  source: 'yt' | 'au' | 'jm'
   title: string
   artist: string
   artwork: string | null
@@ -23,6 +23,8 @@ export interface OfflineTrack {
   url: string
   size: number
   cachedAt: number
+  /** Set when the audio bytes came from a Smart-Match alternative (Audius/Jamendo). */
+  matchedVia?: 'audius' | 'jamendo'
 }
 
 export interface AddOfflineItem {
@@ -43,8 +45,10 @@ const DELETE_TIMEOUT_MS = 3000 // fallback resolve for OFFLINE_DELETE ack
 const SW_READY_TIMEOUT_MS = 5000 // don't hang forever when no SW exists
 
 /** Resolve the same-origin audio URL for a track. */
-export function audioUrlFor(id: string, source?: string): string {
-  return source === 'au' ? `/api/audius/stream/${id}` : `/api/audio/${id}`
+export function audioUrlFor(id: string, source?: string, jamendoKey?: string): string {
+  if (source === 'au') return `/api/audius/stream/${id}`
+  if (source === 'jm') return `/api/jamendo/stream/${id}${jamendoKey ? `?key=${encodeURIComponent(jamendoKey)}` : ''}`
+  return `/api/audio/${id}`
 }
 
 /* ------------------------- IndexedDB helpers ------------------------- */
@@ -184,9 +188,10 @@ export async function sizeOfOffline(trackId: string): Promise<number> {
  */
 export async function addOffline(
   item: AddOfflineItem,
-  source: 'yt' | 'au',
+  source: 'yt' | 'au' | 'jm',
   onProgress?: (loaded: number, total: number | null) => void,
-  urlOverride?: string
+  urlOverride?: string,
+  matchedVia?: 'audius' | 'jamendo'
 ): Promise<AddOfflineResult> {
   if (typeof window === 'undefined') return { ok: false, error: 'no-window' }
   try {
@@ -227,6 +232,7 @@ export async function addOffline(
     await idbPut({
       trackId,
       source,
+      matchedVia,
       title: item.title,
       artist: item.artist,
       artwork: item.artwork ?? null,

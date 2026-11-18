@@ -23,7 +23,7 @@
  *  { type: 'OFFLINE_DELETED', url }
  *  { type: 'OFFLINE_CLEARED' }
  */
-const VERSION = 'dhun-v5'
+const VERSION = 'dhun-v6'
 const SHELL_CACHE = `${VERSION}-shell`
 const STATIC_CACHE = `${VERSION}-static`
 const API_CACHE = `${VERSION}-api`
@@ -304,7 +304,11 @@ self.addEventListener('fetch', (event) => {
 
   // Offline audio: cache-first when explicitly downloaded; ranged seeks are
   // sliced from the cached blob (offline-safe) or passed through when uncached.
-  if (url.pathname.startsWith('/api/audio/') || url.pathname.startsWith('/api/audius/stream/')) {
+  if (
+    url.pathname.startsWith('/api/audio/') ||
+    url.pathname.startsWith('/api/audius/stream/') ||
+    url.pathname.startsWith('/api/jamendo/stream/')
+  ) {
     event.respondWith(serveAudio(request))
     return
   }

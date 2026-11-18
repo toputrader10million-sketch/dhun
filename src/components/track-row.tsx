@@ -11,6 +11,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { EqBars } from '@/components/eq-bars'
 import { formatDuration, formatViews } from '@/lib/format'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
@@ -107,7 +108,7 @@ export const TrackRow = memo(function TrackRow({
   return (
     <div
       className={cn(
-        'group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-accent/60 cursor-pointer select-none',
+        'group flex items-center gap-3 rounded-xl p-2 transition-[background-color,transform] duration-150 ease-out hover:bg-accent/60 active:scale-[0.985] cursor-pointer select-none',
         isCurrent && 'bg-accent'
       )}
       onClick={() => playItem(item, context)}
@@ -122,18 +123,8 @@ export const TrackRow = memo(function TrackRow({
       aria-label={`Play ${item.title}`}
     >
       <span className="relative hidden sm:flex w-5 justify-center text-xs text-muted-foreground tabular-nums shrink-0">
-        {isCurrent && isPlaying ? (
-          <span className="flex items-end gap-0.5 h-3.5" aria-hidden>
-            <span className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse" style={{ height: '60%' }} />
-            <span
-              className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse"
-              style={{ height: '100%', animationDelay: '0.15s' }}
-            />
-            <span
-              className="dhun-eq-bar w-0.5 bg-primary rounded-full animate-pulse"
-              style={{ height: '45%', animationDelay: '0.3s' }}
-            />
-          </span>
+        {isCurrent ? (
+          <EqBars paused={!isPlaying} />
         ) : (
           <>
             <span className="group-hover:hidden">{index !== undefined ? index + 1 : ''}</span>
