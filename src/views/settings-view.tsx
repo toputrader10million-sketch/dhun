@@ -9,6 +9,7 @@ import {
   Globe,
   Info,
   Loader2,
+  Mic2,
   Monitor,
   Moon,
   Palette,
@@ -46,9 +47,11 @@ import {
   EQ_PRESETS,
   APP_THEMES,
   ACCENT_GRADIENTS,
+  LYRICS_FONT_SIZES,
   applyAccent,
   type AccentColor,
   type EqPreset,
+  type LyricsFontSize,
 } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
@@ -534,9 +537,58 @@ export function SettingsView() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
+              <Label htmlFor="auto-mix">Auto-mix (AI queue)</Label>
+              <p className="text-xs text-muted-foreground">
+                Before the queue runs dry, similar songs are added automatically — the music never stops.
+              </p>
+            </div>
+            <Switch id="auto-mix" checked={s.autoMix} onCheckedChange={s.setAutoMix} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
               <Label htmlFor="mini-art">Show art in mini player</Label>
             </div>
             <Switch id="mini-art" checked={s.showMiniArt} onCheckedChange={s.setShowMiniArt} />
+          </div>
+        </div>
+      </section>
+
+      {/* Lyrics (Day 12) */}
+      <section aria-label="Lyrics" className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+          <Mic2 className="h-4 w-4 text-primary" /> Lyrics
+        </h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          Karaoke mode highlights the line you&apos;re on with a live sweep. Sizes apply to synced lyrics.
+        </p>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="karaoke-toggle">Karaoke mode</Label>
+              <p className="text-xs text-muted-foreground">Big centered active line that fills as the song plays.</p>
+            </div>
+            <Switch id="karaoke-toggle" checked={s.lyricsKaraoke} onCheckedChange={s.setLyricsKaraoke} />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <Label htmlFor="lyrics-size">Lyric text size</Label>
+              <p className="text-xs text-muted-foreground">Normal mode line size (karaoke active line is larger).</p>
+            </div>
+            <Select
+              value={s.lyricsFontSize}
+              onValueChange={(v: LyricsFontSize) => s.setLyricsFontSize(v)}
+            >
+              <SelectTrigger id="lyrics-size" className="w-28">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {(Object.keys(LYRICS_FONT_SIZES) as LyricsFontSize[]).map((k) => (
+                  <SelectItem key={k} value={k}>
+                    {LYRICS_FONT_SIZES[k].label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
       </section>

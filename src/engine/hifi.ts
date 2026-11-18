@@ -66,7 +66,7 @@ function pickStream(streams: AudioStream[], maxBitrate?: number): AudioStream | 
   if (maxBitrate && maxBitrate > 0) {
     const capped = usable.filter((s) => (s.bitrate || 0) <= maxBitrate)
     const pool = capped.length > 0 ? capped : usable
-    return pool.find(isM4a) ?? pool[0]
+    return pool.find((s) => isM4a(s.mimeType || '')) ?? pool[0]
   }
   return usable.find((s) => isM4a(s.mimeType || '') && (s.bitrate || 0) >= 120_000) ?? usable[0]
 }

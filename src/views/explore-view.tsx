@@ -1,6 +1,6 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, KeyRound, ListMusic, Loader2, Search, Users, Disc3, Library, Youtube, AudioWaveform } from 'lucide-react'
+import { ArrowLeft, KeyRound, ListMusic, Loader2, Search, Users, Disc3, Library, Youtube, AudioWaveform, Sparkles, X } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { TrackRow, TrackImage } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -33,6 +33,27 @@ type DetailState = {
   items: MusicItem[]
 }
 
+/* Day 16 — NL search plan shape (mirrors /api/ai/nl-search). */
+interface NlPlan {
+  interpretation: string
+  queries: string[]
+  chips: string[]
+  source: 'ai' | 'rules'
+}
+
+const NL_HINT_RE =
+  /(songs?|music|gaan|গান|playlist|vibe|feeling|feel|mood|drive|study|workout|gym|sleep|relax|rain|বৃষ্টি|sad|happy|romantic|love|ভালোবাসা|focus|party|chill|বাংলা|bangla|mix)/i
+
+/** Heuristic: does this query read like a natural-language music request? */
+function looksLikeNaturalLanguage(q: string): boolean {
+  const words = q.trim().split(/\s+/).filter(Boolean)
+  if (words.length >= 4) return true
+  if (words.length >= 2 && NL_HINT_RE.test(q)) return true
+  // Non-Latin scripts (Bangla etc.) are almost always descriptive requests
+  if (/[^\x00-\x7F]/.test(q) && words.length >= 2) return true
+  return false
+}
+
 export function ExploreView() {
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<SearchFilter>('music_songs')
@@ -46,6 +67,11 @@ export function ExploreView() {
   const [showSuggestions, setShowSuggestions] = useState(false)
   const [detail, setDetail] = useState<DetailState | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  // Day 16 — AI search state
+  const [aiPlan, setAiPlan] = useState<NlPlan | null>(null)
+  const [aiItems, setAiItems] = useState<MusicItem[]>([])
+  const [aiLoading, setAiLoading] = useState(false)
+  const [aiPrompt, setAiPrompt] = useState('')
   const inputRef = useRef<HTMLInputElement>(null)
   const searchSeed = useUi((s) => s.searchSeed)
   const clearSearchSeed = useUi((s) => s.clearSearchSeed)
@@ -118,6 +144,65 @@ export function ExploreView() {
     }, 300)
     return () => clearTimeout(t)
   }, [query, showSuggestions])
+
+  /**
+   * Day 16 — Ask Dhun AI: natural-language query → LLM plan → parallel
+   * catalog searches → merged ranked results with an interpretation + chips.
+   */
+  const runAiSearch = useCallback(async (q: string) => {
+    const text = q.trim()
+    if (!text) return
+    setAiPrompt(text)
+    setAiLoading(true)
+    setAiPlan(null)
+    setAiItems([])
+    try {
+      const res = await fetch('/api/ai/nl-search', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: text }),
+      })
+      if (!res.ok) throw new Error(String(res.status))
+      const plan = (await res.json()) as NlPlan
+      setAiPlan(plan)
+      const searches = await Promise.allSettled(
+        plan.queries.map((query) =>
+          fetch(`/api/search?q=${encodeURIComponent(query)}&filter=music_songs`)
+            .then((r) => (r.ok ? r.json() : { items: [] }))
+            .then((d: { items?: MusicItem[] }) => d.items ?? [])
+        )
+      )
+      // Interleave the per-query results, then dedupe.
+      const merged: MusicItem[] = []
+      const maxLen = Math.max(0, ...searches.map((s) => (s.status === 'fulfilled' ? s.value.length : 0)))
+      for (let i = 0; i < maxLen; i++) {
+        for (const s of searches) {
+          if (s.status !== 'fulfilled') continue
+          const it = s.value[i]
+          if (it) merged.push(it)
+        }
+      }
+      const seen = new Set<string>()
+      const deduped = merged.filter((it) => {
+        const k = `${it.source ?? 'yt'}:${it.id}`
+        if (seen.has(k)) return false
+        seen.add(k)
+        return it.id && (it.duration === 0 || (it.duration >= 60 && it.duration <= 900))
+      })
+      setAiItems(deduped.slice(0, 40))
+    } catch {
+      setAiPlan({ interpretation: 'AI search is unavailable right now — showing a direct search instead.', queries: [text], chips: [], source: 'rules' })
+      try {
+        const res = await fetch(`/api/search?q=${encodeURIComponent(text)}&filter=music_songs`)
+        const d = await res.json()
+        setAiItems((d.items ?? []).slice(0, 25))
+      } catch {
+        setAiItems([])
+      }
+    } finally {
+      setAiLoading(false)
+    }
+  }, [])
 
   // External seed (e.g., from artist click)
   useEffect(() => {
@@ -364,6 +449,98 @@ export function ExploreView() {
               ))}
             </div>
           )}
+
+          {/* Day 16 — Ask Dhun AI trigger: natural-language queries on YouTube */}
+          {source === 'yt' &&
+            query.trim().length >= 3 &&
+            looksLikeNaturalLanguage(query) &&
+            !aiLoading &&
+            (!aiPrompt || aiPrompt !== query.trim()) && (
+              <div className="dhun-fade-up mb-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4">
+                <p className="flex items-center gap-2 text-sm font-semibold">
+                  <Sparkles className="h-4 w-4 text-primary" /> Sounds like you&apos;re describing music
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Let Dhun AI read “{query.trim()}” and build the right search plan.
+                </p>
+                <Button size="sm" className="mt-3 rounded-full gap-1.5" onClick={() => runAiSearch(query)}>
+                  <Sparkles className="h-3.5 w-3.5" /> Ask Dhun AI
+                </Button>
+              </div>
+            )}
+
+          {/* Day 16 — AI results panel */}
+          {aiLoading && (
+            <div className="dhun-fade-up mb-4 rounded-2xl border bg-accent/30 p-4">
+              <p className="flex items-center gap-2 text-sm font-medium">
+                <Loader2 className="h-4 w-4 animate-spin text-primary" /> Dhun AI is planning your search…
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground truncate">“{aiPrompt}”</p>
+              <div className="mt-3 space-y-2">
+                {[...Array(4)].map((_, i) => (
+                  <Skeleton key={i} className="h-12 rounded-xl" />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {!aiLoading && aiPlan && (
+            <div className="dhun-fade-up mb-4 rounded-2xl border border-primary/30 bg-primary/5 p-4">
+              <div className="flex items-start gap-2">
+                <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{aiPlan.interpretation}</p>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Searched {aiPlan.queries.length} {aiPlan.queries.length === 1 ? 'query' : 'queries'}
+                    {aiPlan.source === 'ai' ? ' · AI planner' : ' · smart rules'} · found {aiItems.length} tracks
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setAiPlan(null)
+                    setAiItems([])
+                    setAiPrompt('')
+                  }}
+                  className="rounded-full p-1.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+                  aria-label="Close AI results"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {aiPlan.chips.length > 0 && (
+                <div className="mt-2.5 flex flex-wrap gap-1.5">
+                  {aiPlan.chips.map((chip) => (
+                    <button
+                      key={chip}
+                      onClick={() => {
+                        setQuery(chip)
+                        runAiSearch(chip)
+                      }}
+                      className="rounded-full bg-accent px-3 py-1 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-primary hover:text-primary-foreground active:scale-95"
+                    >
+                      {chip}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {!aiLoading && aiPlan && aiItems.length === 0 && (
+            <div className="rounded-xl bg-accent/40 p-8 text-center mb-4">
+              <ListMusic className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
+              <p className="font-medium">No tracks matched this vibe</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Try rephrasing — e.g. “romantic bangla songs for evening”.
+              </p>
+            </div>
+          )}
+
+          {!aiLoading &&
+            aiPlan &&
+            aiItems.map((item, i) => (
+              <TrackRow key={`ai-${item.id}-${i}`} item={item} index={i} context={aiItems} />
+            ))}
 
           {/* results */}
           {loading && !results && (

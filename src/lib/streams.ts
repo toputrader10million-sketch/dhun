@@ -83,7 +83,7 @@ export async function resolveStreams(id: string, maxInstances = 3): Promise<Reso
   if (cached && cached.expires > Date.now()) return cached.data
 
   // Rotate through instances starting from the last healthy one; race in parallel.
-  const start = PIPED_INSTANCES.indexOf(preferredInstance) >= 0 ? preferredInstance : 0
+  const start = PIPED_INSTANCES[preferredInstance] ? preferredInstance : 0
   const order: string[] = []
   for (let i = 0; i < Math.min(maxInstances, PIPED_INSTANCES.length); i++) {
     order.push(PIPED_INSTANCES[(start + i) % PIPED_INSTANCES.length])

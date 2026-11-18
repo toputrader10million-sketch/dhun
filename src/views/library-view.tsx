@@ -40,6 +40,7 @@ import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
 import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
+import { AiPlaylistDialog } from '@/components/ai-playlist-dialog'
 
 export function LibraryView() {
   const { favorites, history, playlists, loadAll, clearHistory, deletePlaylist } = useLibrary()
@@ -219,40 +220,49 @@ export function LibraryView() {
         <TabsContent value="playlists" className="mt-4">
           <div className="mb-4 flex items-center justify-between">
             <p className="text-sm text-muted-foreground">{playlists.length} playlists</p>
-            <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-              <DialogTrigger asChild>
-                <Button size="sm" className="rounded-full gap-1.5">
-                  <Plus className="h-4 w-4" /> New playlist
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-sm">
-                <DialogHeader>
-                  <DialogTitle>Create playlist</DialogTitle>
-                </DialogHeader>
-                <Input
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
-                  placeholder="Playlist name"
-                  aria-label="Playlist name"
-                />
-                <Button
-                  onClick={async () => {
-                    if (!newName.trim()) return
-                    await createPlaylist(newName.trim())
-                    setNewName('')
-                    setCreateOpen(false)
-                  }}
-                >
-                  Create
-                </Button>
-              </DialogContent>
-            </Dialog>
+            <div className="flex items-center gap-2">
+              <AiPlaylistDialog
+                onCreated={(playlistId) => {
+                  void showDetail(playlistId)
+                }}
+              />
+              <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="rounded-full gap-1.5">
+                    <Plus className="h-4 w-4" /> New playlist
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-sm">
+                  <DialogHeader>
+                    <DialogTitle>Create playlist</DialogTitle>
+                  </DialogHeader>
+                  <Input
+                    value={newName}
+                    onChange={(e) => setNewName(e.target.value)}
+                    placeholder="Playlist name"
+                    aria-label="Playlist name"
+                  />
+                  <Button
+                    onClick={async () => {
+                      if (!newName.trim()) return
+                      await createPlaylist(newName.trim())
+                      setNewName('')
+                      setCreateOpen(false)
+                    }}
+                  >
+                    Create
+                  </Button>
+                </DialogContent>
+              </Dialog>
+            </div>
           </div>
           {playlists.length === 0 ? (
             <div className="rounded-xl bg-accent/40 p-8 text-center">
               <ListMusic className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
               <p className="font-medium">No playlists yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Create your first playlist above.</p>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Create one above — or tap “AI playlist” and just describe the vibe.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -391,7 +401,7 @@ export function LibraryView() {
                       {t.artist}
                       {t.size > 0 && ` • ${(t.size / (1024 * 1024)).toFixed(1)} MB`}
                       {` • ${t.source === 'au' ? 'Audius' : t.source === 'jm' ? 'Jamendo' : 'YouTube'}`}
-                      {t.matchedVia && ` · matched from ${t.matchedVia === 'jm' ? 'Jamendo' : 'Audius'}`}
+                      {t.matchedVia && ` · matched from ${t.matchedVia === 'jamendo' ? 'Jamendo' : 'Audius'}`}
                     </p>
                   </div>
                   {prog && (

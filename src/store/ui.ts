@@ -1,7 +1,7 @@
 'use client'
 import { create } from 'zustand'
 
-export type ViewId = 'home' | 'explore' | 'library' | 'network' | 'settings'
+export type ViewId = 'home' | 'explore' | 'charts' | 'library' | 'network' | 'settings'
 
 interface UiState {
   view: ViewId

@@ -1,6 +1,10 @@
 'use client'
+/* Dhun — Home (Day 20: smart sections).
+ * The feed adapts to the user's local hour (morning energy / afternoon focus /
+ * evening vibes / late-night calm) and to live weather (Open-Meteo, region
+ * capital coordinates — no geolocation permission needed). */
 import { useEffect, useState } from 'react'
-import { Sparkles, History, RefreshCw, AudioWaveform } from 'lucide-react'
+import { Sparkles, History, RefreshCw, AudioWaveform, CloudSun } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
 import { TrackRow } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -12,6 +16,24 @@ import { useLibrary } from '@/store/library'
 import { useSettings } from '@/store/settings'
 import { greeting } from '@/lib/format'
 
+interface WeatherInfo {
+  temp: number
+  condition: string
+  isDay: boolean
+  label: string
+  glyph: string
+}
+
+/* Region → representative city coordinates (feeds /api/weather via Open-Meteo) */
+const REGION_COORDS: Record<string, { lat: number; lon: number; city: string }> = {
+  BD: { lat: 23.81, lon: 90.41, city: 'Dhaka' },
+  IN: { lat: 28.61, lon: 77.21, city: 'Delhi' },
+  US: { lat: 40.71, lon: -74.01, city: 'New York' },
+  GB: { lat: 51.51, lon: -0.13, city: 'London' },
+  DE: { lat: 52.52, lon: 13.4, city: 'Berlin' },
+  JP: { lat: 35.68, lon: 139.69, city: 'Tokyo' },
+}
+
 export function HomeView({ region }: { region?: string }) {
   const settingsRegion = useSettings((s) => s.region)
   const activeRegion = region ?? settingsRegion
@@ -19,6 +41,7 @@ export function HomeView({ region }: { region?: string }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
   const [audius, setAudius] = useState<MusicItem[]>([])
+  const [weather, setWeather] = useState<WeatherInfo | null>(null)
   const playItem = usePlayer((s) => s.playItem)
   const history = useLibrary((s) => s.history)
   const loadAll = useLibrary((s) => s.loadAll)
@@ -29,9 +52,12 @@ export function HomeView({ region }: { region?: string }) {
     loadAll()
   }, [loadAll])
 
+  // Smart home feed: local hour + weather drive section selection (Day 20)
   useEffect(() => {
     let alive = true
-    fetch(`/api/home?region=${activeRegion}`)
+    const hour = new Date().getHours()
+    const weatherParam = weather?.condition ?? ''
+    fetch(`/api/home?region=${activeRegion}&hour=${hour}${weatherParam ? `&weather=${weatherParam}` : ''}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
         if (alive) setData(d)
@@ -41,6 +67,23 @@ export function HomeView({ region }: { region?: string }) {
       })
       .finally(() => {
         if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [activeRegion, weather?.condition, refreshCount])
+
+  // Weather: fetch once per mount/region via the region capital (silent — best effort)
+  useEffect(() => {
+    let alive = true
+    const coords = REGION_COORDS[activeRegion] ?? REGION_COORDS.BD
+    fetch(`/api/weather?lat=${coords.lat}&lon=${coords.lon}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
+      .then((d: WeatherInfo) => {
+        if (alive && d && typeof d.temp === 'number' && d.condition) setWeather(d)
+      })
+      .catch(() => {
+        /* weather chip is optional */
       })
     return () => {
       alive = false
@@ -74,16 +117,18 @@ export function HomeView({ region }: { region?: string }) {
   const refresh = () => {
     setRefreshing(true)
     setRefreshCount((c) => c + 1)
-    fetch(`/api/home?region=${activeRegion}&t=${Date.now()}`)
+    fetch(`/api/home?region=${activeRegion}&hour=${new Date().getHours()}&t=${Date.now()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error())))
       .then((d) => setData(d))
       .catch(() => setError(true))
       .finally(() => setRefreshing(false))
   }
 
+  const city = REGION_COORDS[activeRegion]?.city
+
   return (
     <div className="px-4 sm:px-6 py-4">
-      {/* greeting (with accent aura + gradient title) */}
+      {/* greeting (with accent aura + gradient title + live weather chip) */}
       <div className="relative mb-6">
         <div aria-hidden className="dhun-header-aura pointer-events-none absolute -inset-x-4 -top-10 -bottom-4" />
         <div className="relative flex items-start justify-between gap-3">
@@ -93,7 +138,24 @@ export function HomeView({ region }: { region?: string }) {
               {greeting()}
               <span className="ml-2 text-primary">♪</span>
             </h1>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <div className="mt-1.5 flex flex-wrap items-center gap-2">
+              {/* Day 20 — weather chip (best-effort, hidden when unavailable) */}
+              {weather && (
+                <span
+                  className="inline-flex items-center gap-1.5 rounded-full border bg-card/70 px-2.5 py-1 text-xs text-muted-foreground"
+                  aria-label={`Weather in ${city ?? 'your area'}: ${weather.label}, ${weather.temp} degrees`}
+                >
+                  <span aria-hidden>{weather.glyph}</span>
+                  {weather.temp}° {weather.label}
+                  {city ? ` · ${city}` : ''}
+                </span>
+              )}
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-1 text-xs text-primary">
+                <CloudSun className="h-3.5 w-3.5" aria-hidden="true" />
+                Smart feed · adapts to your day
+              </span>
+            </div>
+            <p className="mt-1.5 text-sm text-muted-foreground">
               Search any song from YouTube&apos;s catalog — no ads, no login, works offline too.
             </p>
           </div>

@@ -16,6 +16,7 @@ import { useOffline } from './offline'
 import { useKeys } from './keys'
 import { audioUrlFor } from '@/lib/offline'
 import { useCast } from '@/lib/cast'
+import { useSleepTimer } from '@/lib/sleep-timer'
 import type { AudioStream } from '@/lib/types'
 
 export type RepeatMode = 'off' | 'all' | 'one'
@@ -55,7 +56,7 @@ interface PlayerState {
   /** Mute / unmute. Remembers the pre-mute volume and restores it on unmute. */
   toggleMute: () => void
   muted: boolean
-  startRadio: () => Promise<void>
+  startRadio: (opts?: { mood?: string; era?: string; label?: string }) => Promise<void>
   castCurrent: () => Promise<boolean>
   resumeHandoff: (opts: {
     items: MusicItem[]
@@ -129,6 +130,9 @@ let initialized = false
 let consecutiveErrors = 0
 /** Volume to restore when unmuting (not part of persisted state). */
 let preMuteVolume = 80
+// Auto-mix (Day 18): single-flight guard + throttle.
+let autoMixBusy = false
+let autoMixLastAt = 0
 
 export const usePlayer = create<PlayerState>()(
   persist(
@@ -182,6 +186,50 @@ export const usePlayer = create<PlayerState>()(
         if (!nextItem) return
         const url = resolveAudioUrl(nextItem)
         if (url) hifiEngine.preload(url)
+      }
+
+      /**
+       * Day 18 — Auto-mix: when the queue is about to run dry (≤2 tracks
+       * remaining), silently fetch similar tracks and append them so the
+       * music never stops. Throttled to one attempt per 30s.
+       */
+      async function maybeExtendQueue() {
+        const s = get()
+        const { autoMix, autoplayRadio } = useSettings.getState()
+        if (!autoMix || autoMixBusy) return
+        if (s.repeat === 'one' || s.queue.length === 0) return
+        const remaining = s.queue.length - (s.index + 1)
+        if (remaining > 2) return
+        if (Date.now() - autoMixLastAt < 30_000) return
+        const cur = current()
+        if (!cur) return
+        autoMixBusy = true
+        autoMixLastAt = Date.now()
+        try {
+          const res = await fetch(
+            `/api/radio/${cur.id}?title=${encodeURIComponent(cur.title)}&artist=${encodeURIComponent(cur.artist)}`,
+            { signal: AbortSignal.timeout(9000) }
+          )
+          if (!res.ok) return
+          const data = await res.json()
+          const fresh: MusicItem[] = (data.items || []).filter(
+            (x: MusicItem) =>
+              !s.queue.some((q) => q.id === x.id && (q.source ?? 'yt') === (x.source ?? 'yt'))
+          )
+          if (fresh.length > 0) {
+            set((st) => ({ queue: [...st.queue, ...fresh.slice(0, 6).map(toQueued)] }))
+            toast(`Auto-mix: +${Math.min(fresh.length, 6)} similar songs`, {
+              id: 'auto-mix',
+              description: 'Queue extended so the music keeps flowing.',
+            })
+          }
+        } catch {
+          // Silent — auto-mix must never interrupt playback.
+        } finally {
+          autoMixBusy = false
+        }
+        // Nudge radio autoplay so end-of-queue still resolves if extension failed.
+        void autoplayRadio
       }
 
       async function startPlayback(item: MusicItem, startSeconds = 0) {
@@ -390,6 +438,8 @@ export const usePlayer = create<PlayerState>()(
               if (dur > 0) set({ duration: dur })
               set({ position: cur })
               updateMediaPositionState(cur, dur || s.duration)
+              // Auto-mix: keep the queue topped-up near the end (Day 18)
+              if (dur > 0 && dur - cur < 45) void maybeExtendQueue()
             },
             onError: (code) => {
               const s = get()
@@ -438,6 +488,8 @@ export const usePlayer = create<PlayerState>()(
               updateMediaPositionState(cur, dur || s.duration)
               // Late preload: covers seeks, slow starts, and long first tracks.
               if (dur > 0 && dur - cur < 25) schedulePreload()
+              // Auto-mix: keep the queue topped-up near the end (Day 18)
+              if (dur > 0 && dur - cur < 45) void maybeExtendQueue()
             },
             onError: () => {
               if (!get().hifiActive) return
@@ -721,27 +773,34 @@ export const usePlayer = create<PlayerState>()(
           startPlayback(queue[idx], position > 3 ? position : 0)
         },
 
-        startRadio: async () => {
+        startRadio: async (opts) => {
           const cur = current()
           if (!cur) {
             toast.error('Play something first')
             return
           }
-          toast.loading('Starting radio…', { id: 'radio' })
+          const { mood = '', era = '', label } = opts ?? {}
+          toast.loading(label ?? 'Starting radio…', { id: 'radio' })
           try {
-            const res = await fetch(
-              `/api/radio/${cur.id}?title=${encodeURIComponent(cur.title)}&artist=${encodeURIComponent(cur.artist)}`
-            )
+            const params = new URLSearchParams({
+              title: cur.title,
+              artist: cur.artist,
+            })
+            if (mood) params.set('mood', mood)
+            if (era) params.set('era', era)
+            const res = await fetch(`/api/radio/${cur.id}?${params.toString()}`)
             const data = await res.json()
             const items: MusicItem[] = (data.items || []).filter(
-              (x: MusicItem) => !get().queue.some((q) => q.id === x.id)
+              (x: MusicItem) => !get().queue.some((q) => q.id === x.id && (q.source ?? 'yt') === (x.source ?? 'yt'))
             )
             if (items.length === 0) {
               toast.error('No radio tracks found', { id: 'radio' })
               return
             }
             set((s) => ({ queue: [...s.queue, ...items.map(toQueued)] }))
-            toast.success(`Radio: added ${items.length} tracks`, { id: 'radio' })
+            toast.success(label ? `${label}: added ${items.length} tracks` : `Radio: added ${items.length} tracks`, {
+              id: 'radio',
+            })
             if (!get().isPlaying) get().playQueueAt(get().index + 1)
           } catch {
             toast.error('Radio unavailable right now', { id: 'radio' })
@@ -750,6 +809,18 @@ export const usePlayer = create<PlayerState>()(
       }
 
       async function handleEnded() {
+        // Sleep timer (Day 11): "stop after this track" mode — enforce here so
+        // it works even when the sleep dialog is not mounted.
+        const sleep = useSleepTimer.getState()
+        if (sleep.mode === 'track-end') {
+          sleep.cancel()
+          set({ isPlaying: false })
+          setMediaPlaybackState('paused')
+          toast('Sleep timer — stopped after this track', {
+            description: 'Sweet dreams. Play again any time.',
+          })
+          return
+        }
         const s = get()
         if (s.repeat === 'one') {
           get().playQueueAt(s.index) // playUrl promotion makes this near-instant

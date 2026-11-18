@@ -28,6 +28,7 @@ import { formatDistanceToNow } from 'date-fns'
 import { usePlayer } from '@/store/player'
 import { useCast } from '@/lib/cast'
 import { getDeviceLabel } from '@/lib/device'
+import type { MusicItem } from '@/lib/types'
 
 interface HandoffSummary {
   id: string
@@ -114,8 +115,17 @@ export function HandoffDialog({ variant }: { variant: 'icon' | 'button' }) {
         }[]
       }
       if (!d.items?.length) throw new Error()
+      // Coerce to MusicItem: artwork must be a string, source must be a known source tag.
+      const items: MusicItem[] = d.items.map((x) => ({
+        id: x.id,
+        title: x.title,
+        artist: x.artist,
+        artwork: x.artwork ?? '',
+        duration: x.duration ?? 0,
+        source: x.source === 'au' || x.source === 'jm' ? x.source : 'yt',
+      }))
       usePlayer.getState().resumeHandoff({
-        items: d.items,
+        items,
         index: d.trackIndex,
         position: d.position,
         shuffle: d.shuffle,

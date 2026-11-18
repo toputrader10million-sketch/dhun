@@ -145,3 +145,22 @@
 ---
 
 > **Day 1 আজ শুরু** — Offline/ডাউনলোড রিপেয়ার (নিচে Day-1 সেকশন)।
+
+---
+
+## ৫. অগ্রগতি লগ (শিপ হওয়া ইনক্রিমেন্ট)
+
+- **Day 1** ✅ — Offline/ডাউনলোড রিপেয়ার: SW v5 shell precache, offline-safe seek (206 slice), client-assisted resolve, ভ্যালিডেটেড upstream proxy। Local + production E2E পাস।
+- **Days 2–10** ✅ — Premium ভিজ্যুয়াল (gradient/glass tokens, ambient glow), micro-interactions + EQ bars, পারফরম্যান্স, কিবোর্ড শর্টকাট + ARIA, রেজিলিয়েন্স, Lighthouse পাস, Pro থিম ইঞ্জিন (৬ থিম), Accent designer + gradient, crossfade/gapless + Smart Match (YouTube ডাউনলোড রিপেয়ার: Jamendo/Audius বিকল্প)।
+- **Day 11** ✅ — **Sleep timer pro**: preset + custom মিনিট, "stop after this track" মোড (প্লেয়ার-লেভেল এনফোর্সমেন্ট, ডায়ালগ unmounted হলেও কাজ করে), +5/+15 min এক্সটেনশন, ৫-সেকেন্ড ভলিউম ফেড, সৎ টোস্ট। স্টেট `src/lib/sleep-timer.ts`-এ — UI ও প্লেয়ার দুটোই ব্যবহার করে।
+- **Day 12** ✅ — **কারাওকে lyrics**: সেন্টার-লাইন কারাওকে মোড, active লাইনে লাইভ "sweep" fill (background-clip: text, লাইন প্রগ্রেস = position/line-span), A-/A+ ফন্ট সাইজ কন্ট্রোল (S/M/L/XL, persisted), Settings-এ Lyrics সেকশন।
+- **Day 13** ✅ — **Share-card**: ক্যানভাসে ১২০০×৬৩০ ব্র্যান্ডেড কার্ড (artwork + title + Dhun wordmark) → Web Share API files (canShare গার্ড) → টেক্সট/ক্লিপবোর্ড ফলব্যাক। Artwork CORS-নিরাপদ: allow-listed same-origin `/api/artwork-proxy`।
+- **Day 14** ✅ — **Charts ভিউ**: নতুন nav item (ডেস্কটপ সাইডবার + মোবাইল bottom nav, ৬ আইটেম)। Region charts (BD/IN/PK/US/GB/DE/JP/Global — YouTube Music কিউরেশন), Audius trending (genre filter), Genres ট্যাব (১০ জনর)। `/api/charts`, ১ ঘণ্টা ক্যাশ।
+- **Day 15** ✅ — **AI DJ Daily Mix**: হিস্ট্রি + favorites → weighted top artists → ব্যক্তিগত + "similar" discovery কোয়েরি → ইন্টারলিভ/ডিউপ/শাফল → ২৮-ট্র্যাক মিক্স, ঘণ্টায় রিফ্রেশ। ডেটা না থাকলে trending ফলব্যাক। Home-এ হিরো কার্ড (Play / Shuffle / New mix)।
+- **Day 16** ✅ — **Natural language search**: "রেইনি ইভনিং বাংলা গান" টাইপ কোয়েরি → LLM প্ল্যানার (z-ai SDK, backend-only) → ১–৩ ক্যাটালগ কোয়েরি → ইন্টারলিভড রেজাল্ট + interpretation + mood chips। LLM না চললে deterministic rules প্ল্যানার (বাংলা/English কিওয়ার্ড ম্যাপ)। `/api/ai/nl-search`।
+- **Day 17** ✅ — **Smart radio**: Now Playing-এ "Smart radio" popover — ১০ mood + ৫ era chips + "Based on this track"। `/api/radio/[id]?mood=&era=` mood/era কোয়েরি + seed-blend।
+- **Day 18** ✅ — **Auto-mix**: কিউ শেষের ২ ট্র্যাকের মধ্যে এলে সাইলেন্টলি similar ট্র্যাক যোগ হয় (৩০ সেকেন্ড থ্রটল, single-flight) — মিউজিক কখনো থামে না। Settings-এ টগল।
+- **Day 19** ✅ — **AI playlist builder**: Library-তে "AI playlist" ডায়ালগ — prompt (বাংলা/English) → LLM ২৫-ট্র্যাক spec → ক্যাটালগ রেজোলিউশন (bounded concurrency, playable-title ফিল্টার) → আসল playlist সেভ + অটো-ওপেন। সৎ progress UI (composing → x/N matched → saving)। `/api/ai/playlist`।
+- **Day 20** ✅ — **Smart home**: লোকাল hour অনুযায়ী ডে-পার্ট সেকশন (Morning Energy / Afternoon Focus / Evening Vibes / Late Night Lo-fi), আবহাওয়া-সচেতন সেকশন (বৃষ্টি → "Rainy Day Melodies" প্রথমে), লাইভ weather চিপ (Open-Meteo, region→city ম্যাপ — geolocation permission ছাড়া)। `/api/weather`।
+- **সাথে**: ১০টা pre-existing TypeScript error ফিক্স, TrackImage prop হার্ডেনিং, সব নতুন ভিউ mobile-first responsive (browser-verified)।
+

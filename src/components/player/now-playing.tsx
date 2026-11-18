@@ -27,7 +27,9 @@ import {
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer'
 import { Slider } from '@/components/ui/slider'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import {
   Dialog,
   DialogContent,
@@ -42,10 +44,17 @@ import { usePlayer } from '@/store/player'
 import type { MusicItem } from '@/lib/types'
 import { useUi } from '@/store/ui'
 import { useLibrary } from '@/store/library'
-import { useSettings } from '@/store/settings'
+import {
+  useSettings,
+  RADIO_MOODS,
+  RADIO_ERAS,
+  type LyricsFontSize,
+  LYRICS_FONT_SIZES,
+} from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useCast } from '@/lib/cast'
-import { shareTrack } from '@/lib/share'
+import { useSleepTimer } from '@/lib/sleep-timer'
+import { shareTrackCard } from '@/lib/share'
 import { toast } from 'sonner'
 import { formatDuration } from '@/lib/format'
 import { hifiEngine } from '@/engine/hifi'
@@ -99,17 +108,32 @@ function engineSetVolume(percent: number, hifiActive: boolean) {
   else youtubeEngine.setVolume(percent)
 }
 
+const SLEEP_PRESETS = [15, 30, 45, 60]
+
+/**
+ * Sleep timer pro (Day 11): presets + custom minutes, "stop after this track"
+ * mode, +5-min extension, and a 5-second volume fade-out before pausing.
+ * State lives in src/lib/sleep-timer.ts so the PLAYER can enforce track-end
+ * mode even when this dialog is unmounted.
+ */
 function SleepTimerDialog() {
   const togglePlay = usePlayer((s) => s.togglePlay)
-  const [minutes, setMinutes] = useState<number | null>(null)
+  const mode = useSleepTimer((s) => s.mode)
+  const endsAt = useSleepTimer((s) => s.endsAt)
+  const durationMin = useSleepTimer((s) => s.durationMin)
+  const setTimed = useSleepTimer((s) => s.setTimed)
+  const setTrackEnd = useSleepTimer((s) => s.setTrackEnd)
+  const addMinutes = useSleepTimer((s) => s.addMinutes)
+  const cancel = useSleepTimer((s) => s.cancel)
   const [remaining, setRemaining] = useState<number | null>(null)
+  const [customMin, setCustomMin] = useState('45')
+  const [open, setOpen] = useState(false)
 
   useEffect(() => {
-    if (minutes === null) return
+    if (mode !== 'timed' || endsAt === null) return
     fadeApplied = false // new timer → reset the fade guard
-    const endAt = Date.now() + minutes * 60_000
     const iv = setInterval(() => {
-      const left = Math.max(0, Math.round((endAt - Date.now()) / 1000))
+      const left = Math.max(0, Math.round((endsAt - Date.now()) / 1000))
       setRemaining(left)
       const st = usePlayer.getState()
       const baseVolume = useSettings.getState().volume
@@ -120,7 +144,7 @@ function SleepTimerDialog() {
       }
       if (left <= 0) {
         clearInterval(iv)
-        setMinutes(null)
+        useSleepTimer.getState().cancel()
         setRemaining(null)
         if (fadeApplied) {
           // Restore the user's volume before/after stopping.
@@ -128,6 +152,7 @@ function SleepTimerDialog() {
           fadeApplied = false
         }
         if (st.isPlaying) togglePlay()
+        toast('Sleep timer done', { description: 'Playback paused — sleep well.' })
       }
     }, 1000)
     return () => {
@@ -138,17 +163,27 @@ function SleepTimerDialog() {
         fadeApplied = false
       }
     }
-  }, [minutes, togglePlay])
+  }, [mode, endsAt, togglePlay])
 
   const fmt = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-  const shownRemaining = remaining ?? (minutes !== null ? minutes * 60 : null)
+  const active = mode !== 'off'
+  const customNumber = Math.max(1, Math.min(360, Math.round(Number(customMin) || 0)))
 
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-1.5">
-          <Timer className="h-4 w-4" />
-          {shownRemaining !== null ? fmt(shownRemaining) : 'Sleep'}
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn('gap-1.5', active && 'text-primary')}
+          aria-label={mode === 'timed' ? `Sleep timer active, ${Math.ceil((remaining ?? 0) / 60)} minutes left` : 'Sleep timer'}
+        >
+          <Timer className={cn('h-4 w-4', active && 'animate-pulse')} />
+          {mode === 'timed' && remaining !== null
+            ? fmt(remaining)
+            : mode === 'track-end'
+              ? 'Track end'
+              : 'Sleep'}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-xs">
@@ -157,33 +192,98 @@ function SleepTimerDialog() {
             <Moon className="h-4 w-4" /> Sleep timer
           </DialogTitle>
         </DialogHeader>
-        <p className="text-xs text-muted-foreground">Music will pause automatically when time is up.</p>
-        <div className="grid grid-cols-4 gap-2">
-          {[15, 30, 45, 60].map((m) => (
+
+        {mode === 'off' ? (
+          <>
+            <div className="grid grid-cols-4 gap-2">
+              {SLEEP_PRESETS.map((m) => (
+                <Button
+                  key={m}
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setTimed(m)
+                    toast('Sleep timer set', { description: `Music stops in ${m} min and fades out softly.` })
+                  }}
+                >
+                  {m}m
+                </Button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <Input
+                value={customMin}
+                onChange={(e) => setCustomMin(e.target.value.replace(/[^0-9]/g, ''))}
+                inputMode="numeric"
+                className="h-9"
+                aria-label="Custom minutes"
+              />
+              <Button
+                size="sm"
+                variant="secondary"
+                className="shrink-0"
+                onClick={() => {
+                  setTimed(customNumber)
+                  toast('Sleep timer set', { description: `Music stops in ${customNumber} min.` })
+                }}
+              >
+                Start
+              </Button>
+            </div>
+            <div className="rounded-xl border border-dashed p-3">
+              <p className="text-sm font-medium">After the current track</p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                Finishes this song, then pauses — no next track.
+              </p>
+              <Button
+                size="sm"
+                variant="outline"
+                className="mt-2"
+                onClick={() => {
+                  setTrackEnd()
+                  toast('Sleep timer: after this track')
+                }}
+              >
+                Stop after track
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">Volume fades out before stop.</p>
+          </>
+        ) : (
+          <div className="space-y-3">
+            {mode === 'timed' ? (
+              <div className="rounded-xl bg-accent/60 p-4 text-center">
+                <p className="text-3xl font-extrabold tabular-nums">
+                  {remaining !== null ? fmt(remaining) : `${durationMin ?? 0}:00`}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">until playback pauses</p>
+                <div className="mt-3 flex justify-center gap-2">
+                  <Button size="sm" variant="secondary" onClick={() => addMinutes(5)}>
+                    +5 min
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={() => addMinutes(15)}>
+                    +15 min
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-xl bg-accent/60 p-4 text-center">
+                <p className="text-lg font-bold">Stop after this track</p>
+                <p className="mt-1 text-xs text-muted-foreground">Playback pauses when the song ends.</p>
+              </div>
+            )}
             <Button
-              key={m}
-              variant={minutes === m ? 'default' : 'outline'}
+              variant="secondary"
               size="sm"
-              onClick={() => setMinutes(m)}
+              className="w-full"
+              onClick={() => {
+                cancel()
+                setRemaining(null)
+              }}
             >
-              {m}m
+              Cancel timer
             </Button>
-          ))}
-        </div>
-        {minutes !== null && (
-          <p className="text-[11px] text-muted-foreground">Volume fades out before stop.</p>
-        )}
-        {minutes !== null && (
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => {
-              setMinutes(null)
-              setRemaining(null)
-            }}
-          >
-            Cancel timer
-          </Button>
+          </div>
         )}
       </DialogContent>
     </Dialog>
@@ -477,7 +577,11 @@ export function NowPlaying() {
             )}
             <button
               onClick={async () => {
-                const res = await shareTrack({ title: current.title, artist: current.artist })
+                const res = await shareTrackCard({
+                  title: current.title,
+                  artist: current.artist,
+                  artwork: artSrc ?? current.artwork,
+                })
                 if (res === 'copied') {
                   toast.success('Link copied', {
                     description: `${current.title} — ${current.artist}`,
@@ -486,6 +590,8 @@ export function NowPlaying() {
                   toast.error('Could not share', {
                     description: 'Sharing is not supported on this device.',
                   })
+                } else if (res === 'shared') {
+                  toast.success('Shared ♪')
                 }
               }}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
@@ -574,16 +680,51 @@ export function NowPlaying() {
             </button>
           </div>
 
-          {/* radio */}
+          {/* radio — smart radio (Day 17): mood/era-driven queue or seed-based */}
           <div className="mt-2 flex justify-center px-6">
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full gap-1.5 text-xs"
-              onClick={startRadio}
-            >
-              <Radio className="h-3.5 w-3.5" /> Start radio
-            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="rounded-full gap-1.5 text-xs">
+                  <Radio className="h-3.5 w-3.5" /> Smart radio
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="center" className="w-80 max-w-[92vw] rounded-2xl">
+                <p className="mb-1.5 text-xs font-semibold text-muted-foreground">Mood</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {RADIO_MOODS.map((m) => (
+                    <button
+                      key={m.id}
+                      onClick={() => startRadio({ mood: m.id, label: `${m.label} radio` })}
+                      className="rounded-full bg-accent px-3 py-1.5 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-primary hover:text-primary-foreground active:scale-95"
+                    >
+                      {m.label}
+                    </button>
+                  ))}
+                </div>
+                <p className="mb-1.5 mt-3 text-xs font-semibold text-muted-foreground">Era</p>
+                <div className="flex flex-wrap gap-1.5">
+                  {RADIO_ERAS.map((e) => (
+                    <button
+                      key={e.id}
+                      onClick={() => startRadio({ era: e.id, label: `${e.label} radio` })}
+                      className="rounded-full bg-accent px-3 py-1.5 text-xs font-medium transition-[background-color,transform] duration-150 hover:bg-primary hover:text-primary-foreground active:scale-95"
+                    >
+                      {e.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="mt-3 border-t pt-3">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    className="w-full rounded-full"
+                    onClick={() => startRadio({ label: 'Radio' })}
+                  >
+                    <Radio className="mr-1.5 h-3.5 w-3.5" /> Based on this track
+                  </Button>
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
 
           {/* tabs: lyrics / queue */}

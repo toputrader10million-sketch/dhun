@@ -328,7 +328,7 @@ export async function ytSuggestions(query: string, timeoutMs = 5000): Promise<st
     )
     if (!res.ok) return []
     const raw = await res.text()
-    const m = raw.match(/window\.google\.ac\.h\((.*)\)\s*;?\s*$/s)
+    const m = raw.match(/window\.google\.ac\.h\(([\s\S]*)\)\s*;?\s*$/)
     if (!m) return []
     const parsed = JSON.parse(m[1]) as unknown
     if (!Array.isArray(parsed) || !Array.isArray(parsed[1])) return []

@@ -33,22 +33,22 @@ export function TrackImage({
   className,
   rounded = 'rounded-lg',
 }: {
-  item: Pick<MusicItem, 'artwork' | 'title' | 'id'>
+  item: { artwork?: string; title: string; id?: string }
   className?: string
   rounded?: string
 }) {
   const [stage, setStage] = useState(() => (item.artwork ? 0 : 1))
-  const [prevKey, setPrevKey] = useState(`${item.id}|${item.artwork}`)
-  const nextKey = `${item.id}|${item.artwork}`
+  const [prevKey, setPrevKey] = useState(`${item.id ?? ''}|${item.artwork}`)
+  const nextKey = `${item.id ?? ''}|${item.artwork}`
   if (prevKey !== nextKey) {
     setPrevKey(nextKey)
     setStage(item.artwork ? 0 : 1)
   }
 
-  const ytLike = YT_VIDEO_ID_RE.test(item.id)
+  const ytLike = !!item.id && YT_VIDEO_ID_RE.test(item.id)
   const candidates: string[] = []
   if (item.artwork) candidates.push(item.artwork)
-  if (ytLike) {
+  if (ytLike && item.id) {
     candidates.push(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`)
     candidates.push(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`)
   }

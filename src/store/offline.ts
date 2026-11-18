@@ -30,7 +30,7 @@ interface OfflineStore {
   hydrated: boolean
   hydrate: () => Promise<void>
   refresh: () => Promise<void>
-  download: (item: DownloadItem, source?: 'yt' | 'au') => Promise<boolean>
+  download: (item: DownloadItem, source?: TrackSource) => Promise<boolean>
   remove: (trackId: string) => Promise<void>
   clearAll: () => Promise<void>
   isDownloaded: (trackId: string) => boolean

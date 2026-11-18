@@ -4,6 +4,38 @@ import { persist } from 'zustand/middleware'
 
 export type AccentColor = 'rose' | 'amber' | 'violet' | 'emerald' | 'gold'
 export type PlaybackMode = 'iframe' | 'hifi'
+export type LyricsFontSize = 'sm' | 'md' | 'lg' | 'xl'
+
+/** Karaoke lyric text sizes (Day 12) */
+export const LYRICS_FONT_SIZES: Record<LyricsFontSize, { label: string; line: string; active: string }> = {
+  sm: { label: 'S', line: 'text-base', active: 'text-2xl' },
+  md: { label: 'M', line: 'text-lg', active: 'text-3xl' },
+  lg: { label: 'L', line: 'text-xl', active: 'text-4xl' },
+  xl: { label: 'XL', line: 'text-2xl', active: 'text-5xl' },
+}
+
+/** Day 17 smart-radio moods (id = /api/radio mood param) */
+export const RADIO_MOODS: Array<{ id: string; label: string }> = [
+  { id: 'chill', label: 'Chill' },
+  { id: 'workout', label: 'Workout' },
+  { id: 'romantic', label: 'Romantic' },
+  { id: 'focus', label: 'Focus' },
+  { id: 'party', label: 'Party' },
+  { id: 'drive', label: 'Drive' },
+  { id: 'sad', label: 'Sad' },
+  { id: 'bangla', label: 'Bangla' },
+  { id: 'punjabi', label: 'Punjabi' },
+  { id: 'lofi', label: 'Lo-Fi' },
+]
+
+/** Day 17 smart-radio eras */
+export const RADIO_ERAS: Array<{ id: string; label: string }> = [
+  { id: '80s', label: '80s' },
+  { id: '90s', label: '90s' },
+  { id: '2000s', label: '2000s' },
+  { id: '2010s', label: '2010s' },
+  { id: 'latest', label: 'Latest' },
+]
 
 /** Two-color gradient accent (accent designer presets + future custom gradients) */
 export interface AccentGradient {
@@ -85,6 +117,12 @@ interface SettingsState {
   maxBitrate: number // 0 = no cap
   showMiniArt: boolean
   premium: boolean
+  /** Day 12: karaoke-style lyrics mode (big centered active line) */
+  lyricsKaraoke: boolean
+  /** Day 12: lyric text size */
+  lyricsFontSize: LyricsFontSize
+  /** Day 18: auto-extend the queue with similar tracks before it runs dry */
+  autoMix: boolean
   setPremium: (v: boolean) => void
   setAccent: (a: AccentColor) => void
   setAppTheme: (id: string) => void
@@ -101,6 +139,9 @@ interface SettingsState {
   setAutoOfflineFavorites: (v: boolean) => void
   setMaxBitrate: (v: number) => void
   setShowMiniArt: (v: boolean) => void
+  setLyricsKaraoke: (v: boolean) => void
+  setLyricsFontSize: (v: LyricsFontSize) => void
+  setAutoMix: (v: boolean) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -122,6 +163,9 @@ export const useSettings = create<SettingsState>()(
       maxBitrate: 0,
       showMiniArt: true,
       premium: false,
+      lyricsKaraoke: false,
+      lyricsFontSize: 'md',
+      autoMix: true,
       // Activating premium switches to the gold theme; deactivating reverts gold → rose.
       setPremium: (premium) =>
         set((s) => ({
@@ -157,6 +201,9 @@ export const useSettings = create<SettingsState>()(
       setAutoOfflineFavorites: (autoOfflineFavorites) => set({ autoOfflineFavorites }),
       setMaxBitrate: (maxBitrate) => set({ maxBitrate }),
       setShowMiniArt: (showMiniArt) => set({ showMiniArt }),
+      setLyricsKaraoke: (lyricsKaraoke) => set({ lyricsKaraoke }),
+      setLyricsFontSize: (lyricsFontSize) => set({ lyricsFontSize }),
+      setAutoMix: (autoMix) => set({ autoMix }),
     }),
     { name: 'dhun-settings' }
   )

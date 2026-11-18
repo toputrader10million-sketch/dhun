@@ -61,26 +61,46 @@ function plausibleDuration(a: number | undefined, b: number | undefined): boolea
   return hi === 0 || hi / lo <= 1.8
 }
 
-async function searchAudius(q: string): Promise<{ id: string; title: string; artist: string; duration: number }[]> {
+async function searchAudius(
+  q: string
+): Promise<{ id: string; title: string; artist: string; duration: number; streamable?: boolean }[]> {
   try {
     const res = await fetch(`/api/audius/search?q=${encodeURIComponent(q)}`, { cache: 'no-store' })
     if (!res.ok) return []
-    const data = (await res.json()) as { items?: { id: string; title: string; artist: string; duration?: number }[] }
-    return (data.items ?? []).map((it) => ({ id: it.id, title: it.title, artist: it.artist, duration: it.duration ?? 0 }))
+    const data = (await res.json()) as {
+      items?: { id: string; title: string; artist: string; duration?: number; streamable?: boolean }[]
+    }
+    return (data.items ?? []).map((it) => ({
+      id: it.id,
+      title: it.title,
+      artist: it.artist,
+      duration: it.duration ?? 0,
+      streamable: it.streamable,
+    }))
   } catch {
     return []
   }
 }
 
-async function searchJamendo(q: string, key: string): Promise<{ id: string; title: string; artist: string; duration: number }[]> {
+async function searchJamendo(
+  q: string,
+  key: string
+): Promise<{ id: string; title: string; artist: string; duration: number; streamable?: boolean }[]> {
   if (!key) return []
   try {
     const res = await fetch(`/api/jamendo/search?q=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`, {
       cache: 'no-store',
     })
     if (!res.ok) return []
-    const data = (await res.json()) as { items?: { id: string; title: string; artist: string; duration?: number }[] }
-    return (data.items ?? []).map((it) => ({ id: it.id, title: it.title, artist: it.artist, duration: it.duration ?? 0 }))
+    const data = (await res.json()) as {
+      items?: { id: string; title: string; artist: string; duration?: number }[]
+    }
+    return (data.items ?? []).map((it) => ({
+      id: it.id,
+      title: it.title,
+      artist: it.artist,
+      duration: it.duration ?? 0,
+    }))
   } catch {
     return []
   }

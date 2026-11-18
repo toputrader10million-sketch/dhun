@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useSyncExternalStore } from 'react'
 import { ThemeProvider } from 'next-themes'
-import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower, Keyboard } from 'lucide-react'
+import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower, Keyboard, BarChart3 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
 import { MiniPlayer } from '@/components/player/mini-player'
@@ -11,6 +11,7 @@ import { ShortcutsDialog, useShortcutsDialog } from '@/components/shortcuts-dial
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { HomeView } from '@/views/home-view'
 import { ExploreView } from '@/views/explore-view'
+import { ChartsView } from '@/views/charts-view'
 import { LibraryView } from '@/views/library-view'
 import { NetworkView } from '@/views/network-view'
 import { SettingsView } from '@/views/settings-view'
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils'
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'explore', label: 'Explore', icon: Compass },
+  { id: 'charts', label: 'Charts', icon: BarChart3 },
   { id: 'library', label: 'Library', icon: LibraryIcon },
   { id: 'network', label: 'Network', icon: RadioTower },
   { id: 'settings', label: 'Settings', icon: Settings },
@@ -182,6 +184,7 @@ export function AppShell() {
           <main className="flex-1 pb-44 md:pb-28" id="main-content">
             {view === 'home' && <HomeView key={region} />}
             {view === 'explore' && <ExploreView />}
+            {view === 'charts' && <ChartsView />}
             {view === 'library' && <LibraryView />}
             {view === 'network' && <NetworkView />}
             {view === 'settings' && <SettingsView />}
