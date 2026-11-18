@@ -9,6 +9,7 @@ import { MiniPlayer } from '@/components/player/mini-player'
 import { NowPlaying } from '@/components/player/now-playing'
 import { VideoBubble } from '@/components/player/video-bubble'
 import { ShortcutsDialog, useShortcutsDialog } from '@/components/shortcuts-dialog'
+import { CopilotDock } from '@/components/copilot/copilot-dock'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { HomeView } from '@/views/home-view'
 import { ExploreView } from '@/views/explore-view'
@@ -260,6 +261,9 @@ export function AppShell() {
 
         {/* Keyboard shortcuts help dialog */}
         <ShortcutsDialog />
+
+        {/* Dhun Copilot — AI assistant dock (Day 22) */}
+        <CopilotDock />
 
         {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav

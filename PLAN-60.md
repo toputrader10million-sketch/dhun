@@ -172,5 +172,7 @@
   - **Scroll-reactive header** — মোবাইল/ট্যাবলেট হেডার স্ক্রলে glass গাঢ় + elevation।
   - **Home** — Jump back in + Audius তালিকায় staggered row entrance, গ্রিটিং `md:text-4xl`।
   - সব অ্যানিমেশন `prefers-reduced-motion` সম্মান করে; lint শূন্য error; browser E2E (390/520/800/1280px) পাস।
+- **Day 21** ✅ — **Voice search (Web Speech API)**: Explore সার্চ বারে mic বাটন (অসমর্থিত ব্রাউজারে বাটনই লুকানো — মিথ্যা UI নেই)। Region-aware locale (BD→bn-BD, IN→en-IN…), লাইভ interim caption + EQ indicator, single-shot dictation → টেক্সট সার্চ বক্সে → সাথে সাথে search। প্রতিটা failure-এ নির্দিষ্ট সৎ টোস্ট (mic blocked / no speech / network)। `src/hooks/use-voice-search.ts`। Browser-verified: mic button render, permission-denied toast, স্টেট রিসেট।
+- **Day 22** ✅ — **Dhun Copilot**: ফ্লোটিং dock বাটন (সব ব্রেকপয়েন্টে player chrome-এর উপরে, spring entrance) → bottom-sheet চ্যাট। Backend `/api/ai/copilot`: z-ai LLM + সম্পূর্ণ app knowledge (সব ফিচারের বর্ণনা), context-aware (current track/view/region), multilingual; মিউজিক রিকোয়েস্টে ১–২ catalog query → প্লেয়েবল ট্র্যাক ৮টা চ্যাটেই "Tap to play" লিস্টে; LLM ডাউন থাকলে rule-based fallback (downloads/themes/sleep/shortcuts/hifi topics)। ফলো-আপ chips ক্লিকেবল। Browser E2E: workout mix → ট্র্যাক লিস্ট → ট্র্যাক ক্লিকে মিনি প্লেয়ারে প্লে; "what themes are available" → নির্ভুল গাইড + contextual chips; mobile 390px যাচাই।
 - **সাথে**: ১০টা pre-existing TypeScript error ফিক্স, TrackImage prop হার্ডেনিং, সব নতুন ভিউ mobile-first responsive (browser-verified)।
 

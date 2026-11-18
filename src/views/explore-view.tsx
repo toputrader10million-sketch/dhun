@@ -1,6 +1,7 @@
 'use client'
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { ArrowLeft, KeyRound, ListMusic, Loader2, Search, Users, Disc3, Library, Youtube, AudioWaveform, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, KeyRound, ListMusic, Loader2, Mic, Search, Users, Disc3, Library, Youtube, AudioWaveform, Sparkles, X } from 'lucide-react'
+import { toast } from 'sonner'
 import { Input } from '@/components/ui/input'
 import { TrackRow, TrackImage } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -17,6 +18,8 @@ import { SEARCH_FILTERS } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useKeys } from '@/store/keys'
+import { useSettings } from '@/store/settings'
+import { useVoiceSearch, VOICE_LOCALE_BY_REGION, VOICE_ERROR_MESSAGES, type VoiceError } from '@/hooks/use-voice-search'
 import { cn } from '@/lib/utils'
 
 const FILTER_LABELS: Record<SearchFilter, string> = {
@@ -78,6 +81,28 @@ export function ExploreView() {
   const playItem = usePlayer((s) => s.playItem)
   const jamendoKey = useKeys((s) => s.jamendoKey)
   const setJamendoKey = useKeys((s) => s.setJamendoKey)
+  const region = useSettings((s) => s.region)
+
+  // Day 21 — voice search: speak a song/artist/mood, it lands in the search box
+  // and runs the same search pipeline. Locale follows the music region
+  // (Bangladesh → bn-BD, India → en-IN, …) so Bangla voice queries work.
+  const voiceLocale = VOICE_LOCALE_BY_REGION[region] ?? 'en-US'
+  const voice = useVoiceSearch({
+    locale: voiceLocale,
+    onFinal: (text) => {
+      setQuery(text)
+      runSearch(text, filter)
+      toast.success('Voice search', { description: text })
+    },
+  })
+
+  // Honest error surfacing for voice failures
+  useEffect(() => {
+    if (voice.error) {
+      toast.error('Voice search', { description: VOICE_ERROR_MESSAGES[voice.error as VoiceError] })
+      voice.clearError()
+    }
+  }, [voice.error, voice.clearError])
 
   const runSearch = useCallback(
     (q: string, f: SearchFilter, page?: string, src: TrackSource = source) => {
@@ -258,15 +283,58 @@ export function ExploreView() {
             }
           }}
           placeholder={
-            source === 'au'
-              ? 'Search Audius (indie artists)…'
-              : source === 'jm'
-                ? 'Search Jamendo (Creative Commons)…'
-                : 'Search songs, artists, albums…'
+            voice.listening
+              ? 'Listening… speak now'
+              : source === 'au'
+                ? 'Search Audius (indie artists)…'
+                : source === 'jm'
+                  ? 'Search Jamendo (Creative Commons)…'
+                  : 'Search songs, artists, albums…'
           }
-          className="relative pl-10 h-11 rounded-xl bg-accent/50 border-0"
+          className="relative pl-10 pr-12 h-11 rounded-xl bg-accent/50 border-0"
           aria-label="Search music"
         />
+        {/* Day 21 — mic button (hidden entirely where Web Speech is unsupported) */}
+        {voice.supported && (
+          <button
+            onClick={() => {
+              if (voice.listening) {
+                voice.stop()
+              } else {
+                setShowSuggestions(false)
+                voice.start()
+              }
+            }}
+            className={cn(
+              'absolute right-2.5 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full transition-[background-color,transform,color] duration-150 active:scale-90',
+              voice.listening
+                ? 'bg-primary text-primary-foreground dhun-pulse-glow'
+                : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+            )}
+            aria-label={voice.listening ? 'Stop voice search' : 'Search by voice'}
+            aria-pressed={voice.listening}
+            title={voice.listening ? 'Stop listening' : `Search by voice (${voiceLocale})`}
+          >
+            {voice.listening ? <Mic className="h-4 w-4" /> : <Mic className="h-4 w-4" aria-hidden />}
+          </button>
+        )}
+        {/* live interim caption while listening */}
+        {voice.listening && (
+          <div
+            className="dhun-glass-strong absolute z-30 mt-1 w-full rounded-xl border px-4 py-2.5 text-sm text-muted-foreground"
+            role="status"
+            aria-live="polite"
+          >
+            {voice.interim ? (
+              <span className="text-foreground">{voice.interim}…</span>
+            ) : (
+              <span className="inline-flex items-center gap-2">
+                <span className="dhun-eq h-3"><span /><span /><span /></span>
+                Listening — say a song, artist or mood ({voiceLocale})
+              </span>
+            )}
+          </div>
+        )}
         {suggestions.length > 0 && showSuggestions && (
           <div className="dhun-glass-strong absolute z-30 mt-1 w-full rounded-xl border bg-popover shadow-lg overflow-hidden">
             {suggestions.slice(0, 8).map((s) => (
