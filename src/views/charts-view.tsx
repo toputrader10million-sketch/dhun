@@ -3,10 +3,11 @@
  * with genre tabs. Fully responsive: card rows scroll horizontally on mobile,
  * grid sections on desktop. */
 import { useCallback, useEffect, useState } from 'react'
-import { BarChart3, AudioWaveform, RefreshCw, Globe } from 'lucide-react'
+import { BarChart3, AudioWaveform, RefreshCw, Globe, Heart, Flame } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
+import { EmptyState } from '@/components/empty-state'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useSettings } from '@/store/settings'
@@ -18,7 +19,16 @@ interface ChartSection {
   source: 'yt' | 'au'
 }
 
-type Mode = 'tops' | 'genre' | 'audius'
+type Mode = 'tops' | 'genre' | 'audius' | 'loved'
+
+interface LovedTrack {
+  trackId: string
+  source: string
+  title: string
+  artist: string
+  artwork: string | null
+  likes: number
+}
 
 const GENRES = [
   { id: 'pop', label: 'Pop' },
@@ -52,6 +62,8 @@ export function ChartsView() {
   const [mode, setMode] = useState<Mode>('tops')
   const [genre, setGenre] = useState('pop')
   const [sections, setSections] = useState<ChartSection[]>([])
+  const [loved, setLoved] = useState<LovedTrack[] | null>(null)
+  const [lovedUnavailable, setLovedUnavailable] = useState(false)
   const [loading, setLoading] = useState(true)
   const playItem = usePlayer((s) => s.playItem)
   const [refreshKey, setRefreshKey] = useState(0)
@@ -60,12 +72,39 @@ export function ChartsView() {
   // callbacks (never synchronously in the effect body).
   useEffect(() => {
     let alive = true
+    if (mode === 'loved') {
+      // Day 37 — community loves (anonymous aggregate)
+      void Promise.resolve().then(() => {
+        if (!alive) return
+        setLoading(true)
+        fetch('/api/reactions')
+          .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+          .then((d) => {
+            if (!alive) return
+            setLoved(d.top ?? [])
+            setLovedUnavailable(!!d.unavailable)
+          })
+          .catch(() => {
+            if (alive) {
+              setLoved([])
+              setLovedUnavailable(true)
+            }
+          })
+          .finally(() => {
+            if (alive) setLoading(false)
+          })
+      })
+      return () => {
+        alive = false
+      }
+    }
     const params = new URLSearchParams({ region: region || 'GLOBAL' })
     if (mode === 'genre' || mode === 'audius') params.set('genre', genre)
     params.set('mode', mode)
     void Promise.resolve().then(() => {
       if (!alive) return
       setLoading(true)
+      setLoved(null)
       return fetch(`/api/charts?${params.toString()}`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((d) => {
@@ -142,10 +181,20 @@ export function ChartsView() {
         >
           Genres
         </button>
+        <button
+          onClick={() => setMode('loved')}
+          className={cn(
+            'flex shrink-0 items-center gap-1.5 rounded-full px-3.5 py-1.5 text-sm font-medium transition-[background-color,transform] duration-150 active:scale-95',
+            mode === 'loved' ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
+          )}
+          aria-pressed={mode === 'loved'}
+        >
+          <Heart className="h-3.5 w-3.5" /> Loved
+        </button>
       </div>
 
-      {/* region pills (top charts) */}
-      {mode === 'tops' && (
+      {/* region pills (top charts + genre×region charts, Day 35) */}
+      {(mode === 'tops' || mode === 'genre') && (
         <div className="mb-4 flex flex-wrap gap-1.5">
           {['GLOBAL', 'BD', 'IN', 'PK', 'US', 'GB', 'DE', 'JP'].map((r) => (
             <button
@@ -162,7 +211,9 @@ export function ChartsView() {
             </button>
           ))}
           <span className="hidden items-center text-[11px] text-muted-foreground sm:flex">
-            Charts only — your home feed region is in Settings.
+            {mode === 'genre'
+              ? 'Pick a region to flavor the genre chart.'
+              : 'Charts only — your home feed region is in Settings.'}
           </span>
         </div>
       )}
@@ -219,17 +270,58 @@ export function ChartsView() {
         </div>
       )}
 
-      {!loading && sections.length === 0 && (
-        <div className="rounded-xl bg-accent/40 p-8 text-center">
-          <BarChart3 className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-          <p className="font-medium">Charts are warming up</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            The chart network didn&apos;t respond — tap refresh in a moment.
-          </p>
-        </div>
+      {!loading && mode === 'loved' && loved && loved.length === 0 && (
+        <EmptyState
+          icon={Flame}
+          title="No community loves yet"
+          hint={
+            lovedUnavailable
+              ? 'The reaction service is warming up — check back later.'
+              : 'Be the first: tap the ♥ on any song you love. Counts are anonymous and aggregated — no accounts, no tracking.'
+          }
+        />
       )}
 
-      {!loading &&
+      {!loading && mode === 'loved' && loved && loved.length > 0 && (
+        <>
+          <TrackCardRow
+            title="Loved by the community — last 30 days"
+            items={loved.map((t) => ({
+              id: t.trackId,
+              title: t.title,
+              artist: t.artist,
+              artwork: t.artwork || '',
+              duration: 0,
+              source: t.source as 'yt' | 'au',
+            }))}
+            onPlayAll={() => {
+              const items = loved.map((t) => ({
+                id: t.trackId,
+                title: t.title,
+                artist: t.artist,
+                artwork: t.artwork || '',
+                duration: 0,
+                source: t.source as 'yt' | 'au',
+              }))
+              if (items.length > 0) playItem(items[0], items)
+            }}
+          />
+          <p className="mt-2 text-[11px] text-muted-foreground">
+            Built from anonymous ♥ reactions — aggregated counts only, never personal data. Songs
+            show until their reactions age out (30 days).
+          </p>
+        </>
+      )}
+
+      {!loading && mode !== 'loved' && sections.length === 0 && (
+        <EmptyState
+          icon={BarChart3}
+          title="Charts are warming up"
+          hint="The chart network didn't respond — tap refresh in a moment."
+        />
+      )}
+
+      {!loading && mode !== 'loved' &&
         sections.map((section, si) => (
           <div
             key={section.title}
@@ -246,7 +338,7 @@ export function ChartsView() {
           </div>
         ))}
 
-      {!loading && sections.some((s) => s.source === 'au') && (
+      {!loading && mode !== 'loved' && sections.some((s) => s.source === 'au') && (
         <p className="mt-2 text-[11px] text-muted-foreground">
           Audius sections stream directly — no YouTube required, works offline-friendly.
         </p>

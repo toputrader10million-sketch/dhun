@@ -15,6 +15,29 @@ export interface ChartSection {
   source: 'yt' | 'au'
 }
 
+const REGION_LABELS: Record<string, string> = {
+  BD: 'Bangladesh',
+  IN: 'India',
+  PK: 'Pakistan',
+  US: 'US',
+  GB: 'UK',
+  DE: 'Germany',
+  JP: 'Japan',
+  GLOBAL: 'Global',
+}
+
+/* Day 35 — genre × region blending: regional flavor word for each region */
+const REGION_FLAVOR: Record<string, string> = {
+  BD: 'bangla',
+  IN: 'indian',
+  PK: 'pakistani',
+  US: 'american',
+  GB: 'uk',
+  DE: 'german',
+  JP: 'japanese',
+  GLOBAL: '',
+}
+
 /* Region-curated chart queries (Day 14). Free YouTube Music search only — no
  * paid chart API. Regions mirror the app's Settings region list. */
 const REGION_QUERIES: Record<string, string[]> = {
@@ -87,7 +110,28 @@ export async function GET(req: NextRequest) {
     if (!g) {
       return NextResponse.json({ error: 'Unknown genre' }, { status: 400 })
     }
-    sections = [await ytChartSection(`${g.label} chart`, g.yt)]
+    /* Day 35 — blend region flavor into the genre query when a specific
+     * region is chosen (e.g. BD + Pop → "bangla pop top songs"). */
+    const flavor = REGION_FLAVOR[region] ?? ''
+    const genreWord = g.label.toLowerCase()
+    const blended = flavor && flavor !== genreWord && genreId !== 'bollywood' && genreId !== 'bangla'
+    const queries = blended
+      ? [`${flavor} ${genreWord} top songs`, `top ${genreWord} hits ${flavor}`]
+      : [g.yt]
+    const title = blended
+      ? `${REGION_LABELS[region] ?? region} ${g.label} chart`
+      : `${g.label} chart`
+    const sectionsBuilt = await Promise.all(
+      queries.map((q, i) =>
+        ytChartSection(queries.length > 1 ? (i === 0 ? title : `${g.label} in ${REGION_LABELS[region] ?? region}`) : title, q)
+      )
+    )
+    sections = sectionsBuilt
+    // Every genre chart gets an Audius twin when one exists — direct-stream
+    // tracks that play in Hi-Fi/offline without YouTube.
+    if (g.audius) {
+      sections.push(await audiusSection(`${g.label} on Audius`, g.audius))
+    }
   } else if (mode === 'audius') {
     const g = GENRE_CHARTS.find((x) => x.id === genreId)
     sections = [await audiusSection(g ? `${g.label} on Audius` : 'Audius trending', g?.audius)]

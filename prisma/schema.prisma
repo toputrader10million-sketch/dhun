@@ -36,15 +36,46 @@ model Favorite {
 }
 
 model Playlist {
-  id          String         @id @default(cuid())
+  id          String          @id @default(cuid())
   userId      String?
-  user        User?          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User?           @relation(fields: [userId], references: [id], onDelete: Cascade)
   name        String
   description String?
   cover       String?
   items       PlaylistItem[]
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  shares      PlaylistShare[]
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+}
+
+// Day 34 — public read-only share links. One active token per playlist;
+// a token URL shows the playlist snapshot without exposing the owner.
+model PlaylistShare {
+  id         String   @id @default(cuid())
+  token      String   @unique
+  playlistId String
+  playlist   Playlist @relation(fields: [playlistId], references: [id], onDelete: Cascade)
+  views      Int      @default(0)
+  createdAt  DateTime @default(now())
+
+  @@index([playlistId])
+}
+
+// Day 37 — anonymous aggregate reactions ("loved by the community").
+// No user id, no IP, no session — a fire-and-forget row per like event.
+// Aggregated server-side into community charts.
+model Reaction {
+  id        String   @id @default(cuid())
+  trackId   String
+  source    String   @default("yt")
+  title     String   @default("")
+  artist    String   @default("")
+  artwork   String?
+  region    String   @default("GLOBAL")
+  createdAt DateTime @default(now())
+
+  @@index([trackId])
+  @@index([createdAt])
 }
 
 model PlaylistItem {

@@ -34,6 +34,26 @@ function itemToTrack(item: MusicItem): Omit<LibraryTrack, 'id'> & { trackId: str
   }
 }
 
+/* Day 37 — anonymous aggregate reactions: every new favorite pings the
+ * community chart once per track per session. No ids beyond the track itself. */
+const reactedTracks = new Set<string>()
+function sendReaction(item: MusicItem) {
+  if (reactedTracks.has(item.id)) return
+  reactedTracks.add(item.id)
+  void fetch('/api/reactions', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      trackId: item.id,
+      source: item.source === 'au' ? 'au' : 'yt',
+      title: item.title,
+      artist: item.artist,
+      artwork: item.artwork || undefined,
+      region: useSettings.getState().region,
+    }),
+  }).catch(() => {})
+}
+
 export const useLibrary = create<LibraryState>((set, get) => ({
   favorites: [],
   playlists: [],
@@ -84,6 +104,8 @@ export const useLibrary = create<LibraryState>((set, get) => ({
         toast.error('Could not save favorite')
       } else {
         toast.success('Saved to Favorites', { description: item.title.slice(0, 48) })
+        // Day 37 — anonymous community "loved" counter (fire-and-forget)
+        sendReaction(item)
         // Auto-cache for offline when enabled in Settings
         if (useSettings.getState().autoOfflineFavorites && !useOffline.getState().isDownloaded(item.id)) {
           useOffline

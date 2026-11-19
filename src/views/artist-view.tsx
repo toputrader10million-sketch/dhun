@@ -15,6 +15,7 @@ import { Button } from '@/components/ui/button'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useUi } from '@/store/ui'
 import { usePlayer } from '@/store/player'
+import { EmptyState } from '@/components/empty-state'
 import type { MusicItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -215,11 +216,12 @@ export function ArtistView() {
           ))}
         </div>
       ) : failed ? (
-        <div className="rounded-xl bg-accent/40 p-8 text-center">
-          <Music2 className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-          <p className="font-medium">Could not load this artist</p>
-          <p className="mt-1 text-sm text-muted-foreground">Check your connection and try again.</p>
-        </div>
+        <EmptyState
+          icon={Music2}
+          title="Could not load this artist"
+          hint="Check your connection and try again."
+          action={{ label: 'Retry', onClick: () => artistName && void load(artistName) }}
+        />
       ) : (
         <>
           {/* Related artists (derived from the top-track bylines) */}
@@ -247,13 +249,11 @@ export function ArtistView() {
 
             <TabsContent value="top" className="mt-4">
               {data!.top.length === 0 ? (
-                <div className="rounded-xl bg-accent/40 p-8 text-center">
-                  <Music2 className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                  <p className="font-medium">No playable top tracks found</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Try the Albums tab, or search for this artist in Explore.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Music2}
+                  title="No playable top tracks found"
+                  hint="Try the Albums tab, or search for this artist in Explore."
+                />
               ) : (
                 data!.top.map((item, i) => <TrackRow key={item.id} item={item} index={i} context={data!.top} showViews />)
               )}
@@ -261,13 +261,11 @@ export function ArtistView() {
 
             <TabsContent value="albums" className="mt-4">
               {data!.albums.length === 0 ? (
-                <div className="rounded-xl bg-accent/40 p-8 text-center">
-                  <Disc3 className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                  <p className="font-medium">No discography data</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    iTunes did not return an album list for this name.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Disc3}
+                  title="No discography data"
+                  hint="iTunes did not return an album list for this name."
+                />
               ) : (
                 data!.albums.map((album) => {
                   const items = albumItems[album.name]
@@ -303,13 +301,11 @@ export function ArtistView() {
 
             <TabsContent value="audius" className="mt-4">
               {data!.audius.length === 0 ? (
-                <div className="rounded-xl bg-accent/40 p-8 text-center">
-                  <Music2 className="mx-auto mb-2 h-6 w-6 text-muted-foreground" />
-                  <p className="font-medium">Not on Audius (or nothing matched)</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    Audius hosts independent artists — mainstream catalogs usually aren&apos;t there.
-                  </p>
-                </div>
+                <EmptyState
+                  icon={Music2}
+                  title="Not on Audius (or nothing matched)"
+                  hint="Audius hosts independent artists — mainstream catalogs usually aren't there."
+                />
               ) : (
                 data!.audius.map((item, i) => <TrackRow key={item.id} item={item} index={i} context={data!.audius} />)
               )}

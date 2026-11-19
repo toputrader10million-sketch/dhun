@@ -10,6 +10,8 @@ import { TrackRow } from '@/components/track-row'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { ForYou } from '@/components/for-you'
+import { WavesStrip } from '@/components/waves'
+import { EmptyState } from '@/components/empty-state'
 import type { HomeResponse, MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
@@ -194,6 +196,9 @@ export function HomeView({ region }: { region?: string }) {
         </div>
       )}
 
+      {/* Day 36 — Waves: curated editorial sections (Bangla/Bollywood/Punjab/Global) */}
+      <WavesStrip />
+
       {/* quick picks from history */}
       {quickPicks.length > 0 && (
         <section className="mb-8" aria-label="Quick picks">
@@ -263,13 +268,12 @@ export function HomeView({ region }: { region?: string }) {
       </section>
 
       {!loading && !error && (!data || data.sections.every((s) => s.items.length === 0)) && (
-        <div className="rounded-xl bg-accent/40 p-6 text-center">
-          <Sparkles className="mx-auto h-6 w-6 text-primary mb-2" />
-          <p className="font-medium">Feed is empty right now</p>
-          <p className="mt-1 text-sm text-muted-foreground">
-            Try the Explore tab to search anything, or switch region in Settings.
-          </p>
-        </div>
+        <EmptyState
+          icon={Sparkles}
+          iconTone="primary"
+          title="Feed is empty right now"
+          hint="Try the Explore tab to search anything, or switch region in Settings."
+        />
       )}
     </div>
   )

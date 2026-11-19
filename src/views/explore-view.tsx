@@ -20,6 +20,8 @@ import { useUi } from '@/store/ui'
 import { useKeys } from '@/store/keys'
 import { useSettings } from '@/store/settings'
 import { useVoiceSearch, VOICE_LOCALE_BY_REGION, VOICE_ERROR_MESSAGES, type VoiceError } from '@/hooks/use-voice-search'
+import { DiscoveryFeed } from '@/components/discovery-feed'
+import { EmptyState } from '@/components/empty-state'
 import { cn } from '@/lib/utils'
 
 const FILTER_LABELS: Record<SearchFilter, string> = {
@@ -595,13 +597,12 @@ export function ExploreView() {
           )}
 
           {!aiLoading && aiPlan && aiItems.length === 0 && (
-            <div className="rounded-xl bg-accent/40 p-8 text-center mb-4">
-              <ListMusic className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-              <p className="font-medium">No tracks matched this vibe</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Try rephrasing — e.g. “romantic bangla songs for evening”.
-              </p>
-            </div>
+            <EmptyState
+              icon={ListMusic}
+              title="No tracks matched this vibe"
+              hint="Try rephrasing — e.g. “romantic bangla songs for evening”."
+              className="mb-4"
+            />
           )}
 
           {!aiLoading &&
@@ -609,6 +610,9 @@ export function ExploreView() {
             aiItems.map((item, i) => (
               <TrackRow key={`ai-${item.id}-${i}`} item={item} index={i} context={aiItems} />
             ))}
+
+          {/* Day 38 — Discovery feed while no search is active */}
+          {source === 'yt' && !results && !loading && !aiPlan && <DiscoveryFeed />}
 
           {/* results */}
           {loading && !results && (
@@ -620,13 +624,12 @@ export function ExploreView() {
           )}
 
           {results && results.items.length === 0 && !loading && (
-            <div className="rounded-xl bg-accent/40 p-8 text-center mt-8">
-              <ListMusic className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-              <p className="font-medium">No results{query ? ` for “${query}”` : ''}</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Try a different search or another filter — the catalog covers nearly everything on YouTube.
-              </p>
-            </div>
+            <EmptyState
+              icon={ListMusic}
+              title={`No results${query ? ` for “${query}”` : ''}`}
+              hint="Try a different search or another filter — the catalog covers nearly everything on YouTube."
+              className="mt-8"
+            />
           )}
 
           {(source === 'au' || filter === 'music_songs' || filter === 'videos') &&

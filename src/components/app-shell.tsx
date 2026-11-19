@@ -18,8 +18,10 @@ import { LibraryView } from '@/views/library-view'
 import { NetworkView } from '@/views/network-view'
 import { SettingsView } from '@/views/settings-view'
 import { ArtistView } from '@/views/artist-view'
+import { SharedPlaylistView } from '@/views/shared-view'
 import { DesktopWidget } from '@/components/player/desktop-widget'
 import { HandoffNudge } from '@/components/player/handoff-nudge'
+import { OnboardingTour } from '@/components/onboarding-tour'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
 import { useSettings, applyAccent, eqGainsFor } from '@/store/settings'
@@ -150,6 +152,18 @@ export function AppShell() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Day 34 — deep link: /?p=<token> opens the public playlist viewer once on boot
+  useEffect(() => {
+    try {
+      const token = new URLSearchParams(window.location.search).get('p')
+      if (token && /^[A-Za-z0-9_-]{4,64}$/.test(token)) {
+        useUi.getState().openShared(token)
+      }
+    } catch {
+      /* noop */
+    }
+  }, [])
+
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <RegisterSW />
@@ -264,6 +278,7 @@ export function AppShell() {
                 {view === 'network' && <NetworkView />}
                 {view === 'settings' && <SettingsView />}
                 {view === 'artist' && <ArtistView />}
+                {view === 'shared' && <SharedPlaylistView />}
               </motion.div>
             </AnimatePresence>
           </main>
@@ -289,6 +304,9 @@ export function AppShell() {
 
         {/* Day 32 — proactive handoff resume nudge */}
         <HandoffNudge />
+
+        {/* Day 40 — first-run 3-step tour (only for genuinely new users) */}
+        <OnboardingTour />
 
         {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav

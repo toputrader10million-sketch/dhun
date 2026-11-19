@@ -2,12 +2,15 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   ArrowLeft,
+  Check,
   ClipboardPaste,
   Copy,
   FileDown,
   FileUp,
   Heart,
   History,
+  Link2,
+  Link2Off,
   ListMusic,
   Loader2,
   MoreVertical,
@@ -44,10 +47,12 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from 'sonner'
+import { EmptyState } from '@/components/empty-state'
 import type { MusicItem, PlaylistDetail } from '@/lib/types'
 import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
@@ -55,6 +60,117 @@ import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
 import { AiPlaylistDialog } from '@/components/ai-playlist-dialog'
 import { encodePlaylistCode, decodePlaylistCode, exportPlaylistFile, type PlaylistExport } from '@/lib/playlist-code'
+
+/** Day 34 — create / copy / revoke a public read-only share link for a playlist */
+function ShareLinkDialog({
+  playlistId,
+  playlistName,
+  open,
+  onOpenChange,
+}: {
+  playlistId: string
+  playlistName: string
+  open: boolean
+  onOpenChange: (v: boolean) => void
+}) {
+  const [token, setToken] = useState<string | null>(null)
+  const [views, setViews] = useState<number | null>(null)
+  const [busy, setBusy] = useState<'create' | 'revoke' | null>(null)
+  const [copied, setCopied] = useState(false)
+
+  const mint = async () => {
+    setBusy('create')
+    try {
+      const res = await fetch(`/api/playlists/${playlistId}/share`, { method: 'POST' })
+      const body = (await res.json()) as { token?: string; views?: number; error?: string }
+      if (!res.ok || !body.token) throw new Error(body.error ?? 'Failed')
+      setToken(body.token)
+      setViews(body.views ?? 0)
+      toast.success('Public link ready', { description: 'Anyone with the link can view — read-only.' })
+    } catch {
+      toast.error('Could not create the link — try again')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const revoke = async () => {
+    setBusy('revoke')
+    try {
+      const res = await fetch(`/api/playlists/${playlistId}/share`, { method: 'DELETE' })
+      if (!res.ok) throw new Error()
+      setToken(null)
+      setViews(null)
+      toast.success('Link revoked', { description: 'The old URL no longer works.' })
+    } catch {
+      toast.error('Could not revoke — try again')
+    } finally {
+      setBusy(null)
+    }
+  }
+
+  const url = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/?p=${token}` : ''
+
+  return (
+    <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setCopied(false) }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Public link — {playlistName}</DialogTitle>
+        </DialogHeader>
+        <p className="text-xs text-muted-foreground">
+          A read-only web link anyone can open — no account needed. Viewers can play the tracks
+          or save their own copy. Your account stays private.
+        </p>
+        {token ? (
+          <>
+            <div className="rounded-xl bg-accent/40 p-3">
+              <p className="break-all font-mono text-xs select-all" aria-label="Share URL">{url}</p>
+              {views !== null && (
+                <p className="mt-1.5 text-[11px] text-muted-foreground">{views} open{views === 1 ? '' : 's'} so far</p>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                size="sm"
+                className="rounded-full gap-1.5"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(url)
+                    setCopied(true)
+                    toast.success('Link copied')
+                  } catch {
+                    toast.error('Copy failed — select the link manually')
+                  }
+                }}
+              >
+                {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+                {copied ? 'Copied' : 'Copy link'}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="rounded-full gap-1.5"
+                disabled={busy === 'revoke'}
+                onClick={() => void revoke()}
+              >
+                {busy === 'revoke' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2Off className="h-4 w-4" />}
+                Revoke link
+              </Button>
+            </div>
+            <p className="text-[11px] text-muted-foreground">
+              The link always reflects the playlist as it is right now. Revoking breaks the URL immediately.
+            </p>
+          </>
+        ) : (
+          <Button className="gap-1.5" disabled={busy === 'create'} onClick={() => void mint()}>
+            {busy === 'create' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+            Create public link
+          </Button>
+        )}
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 /** Day 27 — import a playlist from a DHUN1 share code or a JSON export file */
 function ImportPlaylistDialog() {
@@ -211,6 +327,7 @@ export function LibraryView() {
   const removeFromPlaylist = useLibrary((s) => s.removeFromPlaylist)
   const refreshPlaylists = useLibrary((s) => s.refreshPlaylists)
   const [exportMenu, setExportMenu] = useState(false)
+  const [shareLinkOpen, setShareLinkOpen] = useState(false)
 
   useEffect(() => {
     loadAll()
@@ -327,17 +444,33 @@ export function LibraryView() {
               >
                 <Copy className="mr-2 h-4 w-4" /> Copy share code
               </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => {
+                  setShareLinkOpen(true)
+                  setExportMenu(false)
+                }}
+              >
+                <Link2 className="mr-2 h-4 w-4" /> Public link…
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
+          {/* Day 34 — public read-only share link */}
+          {shareLinkOpen && (
+            <ShareLinkDialog
+              playlistId={openPlaylist.id}
+              playlistName={openPlaylist.name}
+              open={shareLinkOpen}
+              onOpenChange={setShareLinkOpen}
+            />
+          )}
         </div>
         {openPlaylist.items.length === 0 ? (
-          <div className="rounded-xl bg-accent/40 p-8 text-center">
-            <Music4 className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-            <p className="text-sm font-medium">This playlist is empty</p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Use the ⋮ menu on any song → “Add to playlist”.
-            </p>
-          </div>
+          <EmptyState
+            icon={Music4}
+            title="This playlist is empty"
+            hint="Use the ⋮ menu on any song → “Add to playlist”."
+          />
         ) : (
           openPlaylist.items.map((it, i) => {
             const item: MusicItem = {
@@ -406,13 +539,12 @@ export function LibraryView() {
               ))}
             </div>
           ) : favorites.length === 0 ? (
-            <div className="rounded-xl bg-accent/40 p-8 text-center">
-              <Heart className="mx-auto h-6 w-6 text-primary mb-2" />
-              <p className="font-medium">No favorites yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Tap the ♥ on any song (or in the ⋮ menu) to save it here.
-              </p>
-            </div>
+            <EmptyState
+              icon={Heart}
+              iconTone="primary"
+              title="No favorites yet"
+              hint="Tap the ♥ on any song (or in the ⋮ menu) to save it here."
+            />
           ) : (
             <>
               <div className="mb-2 flex items-center justify-between">
@@ -470,13 +602,11 @@ export function LibraryView() {
             </div>
           </div>
           {playlists.length === 0 ? (
-            <div className="rounded-xl bg-accent/40 p-8 text-center">
-              <ListMusic className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-              <p className="font-medium">No playlists yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Create one above — or tap “AI playlist” and just describe the vibe.
-              </p>
-            </div>
+            <EmptyState
+              icon={ListMusic}
+              title="No playlists yet"
+              hint="Create one above — or tap “AI playlist” and just describe the vibe."
+            />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
               {playlists.map((p) => (
@@ -541,11 +671,11 @@ export function LibraryView() {
             )}
           </div>
           {history.length === 0 ? (
-            <div className="rounded-xl bg-accent/40 p-8 text-center">
-              <History className="mx-auto h-6 w-6 text-muted-foreground mb-2" />
-              <p className="font-medium">Nothing played yet</p>
-              <p className="mt-1 text-sm text-muted-foreground">Your listening history will appear here.</p>
-            </div>
+            <EmptyState
+              icon={History}
+              title="Nothing played yet"
+              hint="Your listening history will appear here."
+            />
           ) : (
             historyItems.map((item, i) => (
               <TrackRow key={`${item.id}-${i}`} item={item} context={historyItems} />
@@ -574,13 +704,12 @@ export function LibraryView() {
               ))}
             </div>
           ) : offlineItems.length === 0 ? (
-            <div className="rounded-xl bg-accent/40 p-8 text-center">
-              <Download className="mx-auto h-6 w-6 text-primary mb-2" />
-              <p className="font-medium">No offline downloads</p>
-              <p className="mt-1 text-sm text-muted-foreground">
-                Use the ⋮ menu on any song → “Download for offline”. Saved songs play even without internet.
-              </p>
-            </div>
+            <EmptyState
+              icon={Download}
+              iconTone="primary"
+              title="No offline downloads"
+              hint="Use the ⋮ menu on any song → “Download for offline”. Saved songs play even without internet."
+            />
           ) : (
             offlineItems.map((t) => {
               const item: MusicItem = {

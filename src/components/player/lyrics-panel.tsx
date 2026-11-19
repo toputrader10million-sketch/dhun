@@ -22,6 +22,15 @@ interface LyricsState {
 
 const SIZE_ORDER: LyricsFontSize[] = ['sm', 'md', 'lg', 'xl']
 
+/* Day 39 — Bengali script detection: roomier line-height + lang attribute so
+ * browsers pick a proper Bangla font and readers get breathing room. */
+const BENGALI_RE = /[\u0980-\u09FF]/
+
+const SOURCE_LABEL: Record<string, string> = {
+  lrclib: 'LRCLIB',
+  chartlyrics: 'ChartLyrics',
+}
+
 export function LyricsPanel({ item }: { item: MusicItem }) {
   // Component is mounted with key={item.id} so it resets per track.
   const [data, setData] = useState<LyricsState | null>(null)
@@ -55,6 +64,15 @@ export function LyricsPanel({ item }: { item: MusicItem }) {
   }, [item.id, item.title, item.artist, item.duration])
 
   const lines = useMemo(() => (data?.synced ? parseLrc(data.synced) : []), [data])
+  const isBangla = useMemo(
+    () =>
+      BENGALI_RE.test(item.title) ||
+      BENGALI_RE.test(item.artist) ||
+      BENGALI_RE.test(data?.plain ?? '') ||
+      BENGALI_RE.test(data?.synced?.replace(/\[[^\]]*\]/g, '') ?? ''),
+    [item.title, item.artist, data]
+  )
+  const sourceLabel = data?.source ? SOURCE_LABEL[data.source] : undefined
 
   const activeIndex = useMemo(() => {
     if (lines.length === 0) return -1
@@ -125,6 +143,14 @@ export function LyricsPanel({ item }: { item: MusicItem }) {
               A+
             </button>
           </div>
+          {isBangla && (
+            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              বাংলা
+            </span>
+          )}
+          {sourceLabel && (
+            <span className="hidden text-[10px] text-muted-foreground sm:inline">via {sourceLabel}</span>
+          )}
           <button
             onClick={() => setLyricsKaraoke(!karaoke)}
             className={cn(
@@ -173,8 +199,10 @@ export function LyricsPanel({ item }: { item: MusicItem }) {
             <p
               key={`${line.time}-${i}`}
               ref={i === activeIndex ? activeRef : undefined}
+              lang={isBangla ? 'bn' : undefined}
               className={cn(
-                'py-1.5 leading-relaxed transition-all duration-300',
+                'py-1.5 transition-all duration-300',
+                isBangla ? 'leading-[1.9]' : 'leading-relaxed',
                 sizes.line,
                 i === activeIndex
                   ? 'text-foreground font-semibold scale-[1.02] origin-left'
@@ -194,10 +222,20 @@ export function LyricsPanel({ item }: { item: MusicItem }) {
     return (
       <div className="h-full overflow-y-auto dhun-scroll px-2 py-4" aria-label="Lyrics">
         <div className="mb-3 flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Mic2 className="h-3 w-3" /> Lyrics • LRCLIB
+          <Mic2 className="h-3 w-3" /> Lyrics
+          {sourceLabel ? ` • ${sourceLabel}` : ''}
+          {isBangla ? ' • বাংলা' : ''}
         </div>
         {data.plain.split('\n').map((line, i) => (
-          <p key={i} className={cn('py-1 leading-relaxed text-foreground/90', sizes.line)}>
+          <p
+            key={i}
+            lang={isBangla ? 'bn' : undefined}
+            className={cn(
+              'py-1 text-foreground/90',
+              isBangla ? 'leading-[1.9]' : 'leading-relaxed',
+              sizes.line
+            )}
+          >
             {line || ' '}
           </p>
         ))}
@@ -213,8 +251,8 @@ export function LyricsPanel({ item }: { item: MusicItem }) {
       </div>
       <p className="text-sm font-medium">No lyrics found</p>
       <p className="text-xs text-muted-foreground max-w-xs">
-        We searched LRCLIB (free lyrics database) for “{item.title}” but there is no match yet.
-        Lyrics support grows every day.
+        We searched LRCLIB and ChartLyrics (free lyrics databases) for “{item.title}” but there is
+        no match yet. Lyrics support grows every day.
       </p>
     </div>
   )
