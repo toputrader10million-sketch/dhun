@@ -12,6 +12,7 @@ import { useSettings } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useCast } from '@/lib/cast'
 import { cn } from '@/lib/utils'
+import { useT } from '@/lib/i18n'
 import { formatDuration } from '@/lib/format'
 
 /**
@@ -53,6 +54,7 @@ function MarqueeText({ text, className }: { text: string; className?: string }) 
 }
 
 export function MiniPlayer() {
+  const t = useT()
   const current = usePlayer((s) => s.queue[s.index])
   const isPlaying = usePlayer((s) => s.isPlaying)
   const isBuffering = usePlayer((s) => s.isBuffering)
@@ -95,7 +97,7 @@ export function MiniPlayer() {
           transition={{ type: 'spring', stiffness: 380, damping: 34 }}
           className="fixed inset-x-0 bottom-16 lg:bottom-0 z-40 lg:left-60 border-t dhun-glass-strong"
           role="region"
-          aria-label="Player controls"
+          aria-label={t('Player controls')}
         >
           {/* progress line with glowing leading dot */}
           <div className="absolute top-0 left-0 h-0.5 bg-muted w-full">
@@ -117,7 +119,7 @@ export function MiniPlayer() {
             <button
               className="flex items-center gap-3 min-w-0 flex-1 text-left group"
               onClick={openNowPlaying}
-              aria-label="Open now playing"
+              aria-label={t('Open now playing')}
             >
               {showMiniArt && (
                 <TrackImage item={current} className="h-10 w-10" rounded="rounded-md" />
@@ -190,7 +192,7 @@ export function MiniPlayer() {
               <button
                 onClick={prev}
                 className="hidden xs:inline-flex rounded-full p-2 transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90"
-                aria-label="Previous track"
+                aria-label={t('Previous track')}
               >
                 <SkipBack className="h-4 w-4 fill-current" />
               </button>
@@ -208,7 +210,7 @@ export function MiniPlayer() {
               <button
                 onClick={next}
                 className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95"
-                aria-label="Next track"
+                aria-label={t('Next track')}
               >
                 <SkipForward className="h-4 w-4 fill-current" />
               </button>
@@ -227,14 +229,14 @@ export function MiniPlayer() {
               <button
                 onClick={() => toggleFavorite(current)}
                 className="rounded-full p-2 transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95"
-                aria-label="Toggle favorite"
+                aria-label={t('Toggle favorite')}
               >
                 <Heart className={cn('h-4 w-4', fav && 'fill-current text-primary')} />
               </button>
               <button
                 onClick={openNowPlaying}
                 className="rounded-full p-2 transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95"
-                aria-label="Open queue"
+                aria-label={t('Open queue')}
               >
                 <ListMusic className="h-4 w-4" />
               </button>
@@ -252,7 +254,7 @@ export function MiniPlayer() {
               step={1}
               onValueChange={(v) => seek(v[0])}
               className="flex-1 h-1.5"
-              aria-label="Seek"
+              aria-label={t('Seek')}
             />
           </div>
         </motion.div>

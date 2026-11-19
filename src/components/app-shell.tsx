@@ -1,14 +1,18 @@
 'use client'
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import dynamic from 'next/dynamic'
 import { ThemeProvider } from 'next-themes'
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion'
+import { toast } from 'sonner'
 import { Home, Library as LibraryIcon, Compass, Settings, WifiOff, AudioWaveform, RadioTower, Keyboard, BarChart3 } from 'lucide-react'
 import { Toaster } from '@/components/ui/sonner'
 import RegisterSW from '@/components/pwa/register-sw'
 import { MiniPlayer } from '@/components/player/mini-player'
 import { NowPlaying } from '@/components/player/now-playing'
 import { VideoBubble } from '@/components/player/video-bubble'
-import { ShortcutsDialog, useShortcutsDialog } from '@/components/shortcuts-dialog'
+import { useShortcutsDialog } from '@/components/shortcuts-dialog'
+// Day 47 — below-fold dialog chrome is code-split out of the first-load bundle
+const ShortcutsDialog = dynamic(() => import('@/components/shortcuts-dialog').then((m) => m.ShortcutsDialog), { ssr: false })
 import { CopilotDock } from '@/components/copilot/copilot-dock'
 import { useKeyboardShortcuts } from '@/hooks/use-keyboard-shortcuts'
 import { HomeView } from '@/views/home-view'
@@ -22,13 +26,17 @@ import { SharedPlaylistView } from '@/views/shared-view'
 import { DesktopWidget } from '@/components/player/desktop-widget'
 import { HandoffNudge } from '@/components/player/handoff-nudge'
 import { OnboardingTour } from '@/components/onboarding-tour'
+import { InstallSheet } from '@/components/pwa/install-sheet'
+import { handleProtocolLink } from '@/lib/pwa-links'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
 import { useSettings, applyAccent, eqGainsFor } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useSmartDownloads } from '@/lib/smart-downloads'
+import { autoEvictIfNeeded } from '@/lib/storage-manager'
 import { hifiEngine } from '@/engine/hifi'
 import { useCast } from '@/lib/cast'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
@@ -39,6 +47,9 @@ const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
   { id: 'network', label: 'Network', icon: RadioTower },
   { id: 'settings', label: 'Settings', icon: Settings },
 ]
+
+/** Day 45 — views reachable via manifest shortcuts (/?view=…) */
+const DEEP_VIEWS: ViewId[] = ['home', 'explore', 'charts', 'library', 'network', 'settings']
 
 /* Shared spring for nav indicators — snappy slide, no overshoot bounce */
 const NAV_SPRING = { type: 'spring' as const, stiffness: 520, damping: 42 }
@@ -53,6 +64,7 @@ function subscribeOnline(onChange: () => void) {
 }
 
 function OfflineBanner() {
+  const t = useT()
   // useSyncExternalStore avoids hydration mismatch: server snapshot = online
   const online = useSyncExternalStore(
     subscribeOnline,
@@ -62,26 +74,28 @@ function OfflineBanner() {
   if (online) return null
   return (
     <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-destructive px-3 py-1.5 text-xs text-white">
-      <WifiOff className="h-3.5 w-3.5" /> You&apos;re offline — some features are limited.
+      <WifiOff className="h-3.5 w-3.5" /> {t("You're offline — some features are limited.")}
     </div>
   )
 }
 
 function ShortcutsButton() {
+  const t = useT()
   const setOpen = useShortcutsDialog((s) => s.setOpen)
   return (
     <button
       onClick={() => setOpen(true)}
       className="mt-3 flex items-center gap-2 rounded-xl px-3 py-2 text-xs text-muted-foreground transition-[background-color,transform] hover:bg-accent/60 hover:text-foreground active:scale-[0.97]"
       aria-haspopup="dialog"
-      aria-label="Keyboard shortcuts"
+      aria-label={t('Keyboard shortcuts')}
     >
-      <Keyboard className="h-3.5 w-3.5" aria-hidden="true" /> Keyboard shortcuts
+      <Keyboard className="h-3.5 w-3.5" aria-hidden="true" /> {t('Keyboard shortcuts')}
     </button>
   )
 }
 
 export function AppShell() {
+  const t = useT()
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
   const goSearch = useUi((s) => s.goSearch)
@@ -94,6 +108,7 @@ export function AppShell() {
   const region = useSettings((s) => s.region)
   const reduceMotion = !!useReducedMotion()
   const [scrolled, setScrolled] = useState(false)
+  const language = useSettings((s) => s.language)
 
   // Global keyboard shortcuts (playback, navigation, help dialog)
   useKeyboardShortcuts()
@@ -107,6 +122,8 @@ export function AppShell() {
   useEffect(() => {
     useOffline.getState().hydrate()
     useCast.getState().actions.init()
+    // Day 48 — storage pressure valve (no-op unless the user opted in)
+    void autoEvictIfNeeded()
     // Smart downloads: sweep favorites shortly after boot (throttled internally).
     const bootTimer = setTimeout(() => void useSmartDownloads.getState().sweep('boot'), 6000)
     const onOnline = () => void useSmartDownloads.getState().sweep('online')
@@ -164,6 +181,49 @@ export function AppShell() {
     }
   }, [])
 
+  // Day 43 — sync <html lang> for screen readers + font shaping
+  useEffect(() => {
+    document.documentElement.lang = language === 'bn' ? 'bn' : 'en'
+  }, [language])
+
+  // Day 45 — PWA entry points: manifest shortcuts (/?view=…), share target
+  // (Android share → /?share-target=1&title&text&url), protocol handler
+  // (web+dhuun://play/yt/<id> → /?pwa-link=play/yt/<id>). One-time on boot,
+  // consumed params are stripped so a reload never re-triggers them.
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href)
+      const params = url.searchParams
+      const viewParam = params.get('view')
+      if (viewParam && (DEEP_VIEWS as string[]).includes(viewParam)) {
+        useUi.getState().setView(viewParam as ViewId)
+      }
+      let consumed = false
+      if (params.has('share-target')) {
+        consumed = true
+        const shared = (params.get('url') ?? params.get('text') ?? params.get('title') ?? '').trim()
+        if (shared) {
+          useUi.getState().goSearch(shared)
+          toast('Shared content received', {
+            description: 'Search is prefilled — pick the result you want to play.',
+          })
+        }
+        for (const k of ['share-target', 'url', 'text', 'title']) params.delete(k)
+      }
+      const link = params.get('pwa-link')
+      if (link) {
+        consumed = true
+        params.delete('pwa-link')
+        void handleProtocolLink(link)
+      }
+      if (consumed) {
+        window.history.replaceState(null, '', url.pathname + params.toString())
+      }
+    } catch {
+      /* noop */
+    }
+  }, [])
+
   return (
     <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange>
       <RegisterSW />
@@ -183,10 +243,10 @@ export function AppShell() {
             </span>
             <span>
               <span className="block text-lg font-extrabold leading-none tracking-tight">Dhun</span>
-              <span className="block text-[10px] text-muted-foreground">free music platform</span>
+              <span className="block text-[10px] text-muted-foreground">{t('free music platform')}</span>
             </span>
           </button>
-          <nav className="flex flex-col gap-1" aria-label="Main navigation">
+          <nav className="flex flex-col gap-1" aria-label={t('Main navigation')}>
             {NAV.map((n) => {
               const active = view === n.id
               return (
@@ -214,7 +274,7 @@ export function AppShell() {
                     )}
                     aria-hidden="true"
                   />
-                  <span className="relative">{n.label}</span>
+                  <span className="relative">{t(n.label)}</span>
                 </button>
               )
             })}
@@ -225,10 +285,10 @@ export function AppShell() {
             className="mt-4 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/60 hover:text-foreground active:scale-[0.98]"
           >
             <Home className="hidden" aria-hidden="true" />
-            <Compass className="h-4.5 w-4.5" aria-hidden="true" /> Search anything…
+            <Compass className="h-4.5 w-4.5" aria-hidden="true" /> {t('Search anything…')}
           </button>
           <div className="mt-auto px-2 text-[11px] leading-relaxed text-muted-foreground">
-            <p className="font-medium text-foreground/80">Built on free APIs</p>
+            <p className="font-medium text-foreground/80">{t('Built on free APIs')}</p>
             <p>Piped • Audius • LRCLIB • iTunes • YouTube embed</p>
           </div>
         </aside>
@@ -257,7 +317,7 @@ export function AppShell() {
               className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground transition-[background-color,transform] active:scale-[0.95]"
               aria-label="Search"
             >
-              <Compass className="h-4 w-4" aria-hidden="true" /> Search
+              <Compass className="h-4 w-4" aria-hidden="true" /> {t('Search')}
             </button>
           </header>
 
@@ -285,8 +345,7 @@ export function AppShell() {
 
           {/* Footer note (desktop) — mt-auto keeps it pinned on short pages */}
           <footer className="mt-auto hidden border-t px-6 py-3 text-center text-[11px] text-muted-foreground lg:block">
-            Dhun — a free PWA music platform. Metadata by Piped, indie catalog by Audius, lyrics by LRCLIB,
-            artwork by iTunes, playback via YouTube&apos;s official embedded player. No ads. No tracking.
+            {t("Dhun — a free PWA music platform. Metadata by Piped, indie catalog by Audius, lyrics by LRCLIB, artwork by iTunes, playback via YouTube's official embedded player. No ads. No tracking.")}
           </footer>
         </div>
 
@@ -308,10 +367,13 @@ export function AppShell() {
         {/* Day 40 — first-run 3-step tour (only for genuinely new users) */}
         <OnboardingTour />
 
+        {/* Day 46 — custom install sheet (beforeinstallprompt / iOS guidance) */}
+        <InstallSheet />
+
         {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav
           className="fixed inset-x-0 bottom-0 z-40 flex h-16 items-stretch border-t bg-background/95 backdrop-blur lg:hidden pb-safe"
-          aria-label="Bottom navigation"
+          aria-label={t('Bottom navigation')}
         >
           {NAV.map((n) => {
             const active = view === n.id
@@ -340,7 +402,7 @@ export function AppShell() {
                 >
                   <n.icon className="h-5 w-5" aria-hidden="true" />
                 </motion.span>
-                {n.label}
+                {t(n.label)}
               </button>
             )
           })}

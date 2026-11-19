@@ -13,6 +13,7 @@ import { Drum, Film, Globe2, Loader2, Waves, X } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WAVES, type WaveMeta, type WaveTrackResponse } from '@/lib/waves'
+import { useT } from '@/lib/i18n'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { cn } from '@/lib/utils'
@@ -25,6 +26,7 @@ const WAVE_ICONS: Record<WaveMeta['icon'], typeof Waves> = {
 }
 
 export function WavesStrip() {
+  const t = useT()
   const [openId, setOpenId] = useState<string | null>(null)
   const [tracks, setTracks] = useState<Record<string, MusicItem[]>>({})
   const [loadingId, setLoadingId] = useState<string | null>(null)
@@ -58,16 +60,16 @@ export function WavesStrip() {
   const openItems = openId ? tracks[openId] : undefined
 
   return (
-    <section className="mb-8" aria-label="Waves — curated editorial picks">
+    <section className="mb-8" aria-label={t('Waves — curated editorial picks')}>
       <div className="mb-3 flex items-center gap-2">
         <Waves className="h-4 w-4 text-primary" aria-hidden="true" />
-        <h2 className="text-lg font-bold">Waves</h2>
+        <h2 className="text-lg font-bold">{t('Waves')}</h2>
         <span className="rounded-full bg-primary/15 text-primary text-[10px] font-semibold px-2 py-0.5">
-          curated by Dhun
+          {t('curated by Dhun')}
         </span>
       </div>
 
-      <div className="flex gap-3 overflow-x-auto dhun-scroll pb-2 snap-x" role="group" aria-label="Waves">
+      <div className="flex gap-3 overflow-x-auto dhun-scroll pb-2 snap-x" role="group" aria-label={t('Waves')}>
         {WAVES.map((wave, i) => {
           const Icon = WAVE_ICONS[wave.icon]
           const open = openId === wave.id

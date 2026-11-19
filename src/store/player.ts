@@ -14,7 +14,7 @@ import {
 import { useSettings, eqGainsFor } from './settings'
 import { useOffline } from './offline'
 import { useKeys } from './keys'
-import { audioUrlFor } from '@/lib/offline'
+import { audioUrlFor, touchOfflinePlayed } from '@/lib/offline'
 import { useCast } from '@/lib/cast'
 import { useSleepTimer } from '@/lib/sleep-timer'
 import type { AudioStream } from '@/lib/types'
@@ -272,6 +272,8 @@ export const usePlayer = create<PlayerState>()(
         if (offline.isDownloaded(item.id)) {
           const url = offline.urlFor(item.id)
           if (url) {
+            // Day 48 — LRU bookkeeping (fire-and-forget, never blocks playback)
+            touchOfflinePlayed(item.id)
             // Mark active BEFORE play(): 'playing' can fire before the await resolves
             set({ hifiActive: true })
             const ok = await hifiEngine.playUrl(url, startSeconds)

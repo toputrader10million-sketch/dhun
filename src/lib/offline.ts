@@ -23,6 +23,8 @@ export interface OfflineTrack {
   url: string
   size: number
   cachedAt: number
+  /** Day 48 — last offline playback time; drives LRU auto-eviction. */
+  lastPlayedAt?: number
   /** Set when the audio bytes came from a Smart-Match alternative (Audius/Jamendo). */
   matchedVia?: 'audius' | 'jamendo'
 }
@@ -124,6 +126,16 @@ async function idbClear(): Promise<void> {
     const store = db.transaction(STORE, 'readwrite').objectStore(STORE)
     await reqToPromise(store.clear())
   })
+}
+
+/** Day 48 — record an offline playback (LRU bookkeeping; fire-and-forget). */
+async function idbTouchPlayed(trackId: string): Promise<void> {
+  try {
+    const meta = await idbGet(trackId)
+    if (meta) await idbPut({ ...meta, lastPlayedAt: Date.now() })
+  } catch {
+    /* LRU bookkeeping must never break playback */
+  }
 }
 
 function delay(ms: number): Promise<null> {
@@ -297,4 +309,9 @@ export async function clearAllOffline(): Promise<void> {
 export async function totalOfflineSize(): Promise<number> {
   const items = await listOffline()
   return items.reduce((sum, t) => sum + (t.size || 0), 0)
+}
+
+/** Mark a track as just-played-offline (Day 48 LRU order). */
+export function touchOfflinePlayed(trackId: string): void {
+  void idbTouchPlayed(trackId)
 }

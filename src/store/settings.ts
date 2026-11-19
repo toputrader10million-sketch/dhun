@@ -5,6 +5,8 @@ import { persist } from 'zustand/middleware'
 export type AccentColor = 'rose' | 'amber' | 'violet' | 'emerald' | 'gold'
 export type PlaybackMode = 'iframe' | 'hifi'
 export type LyricsFontSize = 'sm' | 'md' | 'lg' | 'xl'
+/** Day 43 — UI language (English source / বাংলা) */
+export type AppLanguage = 'en' | 'bn'
 
 /** Day 26 — Now Playing visualizer styles */
 export type VisualizerMode = 'off' | 'bars' | 'wave' | 'ring'
@@ -161,6 +163,10 @@ interface SettingsState {
   visualizer: VisualizerMode
   /** Day 31: floating desktop now-playing widget with mini spectrum */
   desktopWidget: boolean
+  /** Day 43: UI language — English or বাংলা (instant switch, persisted) */
+  language: AppLanguage
+  /** Day 48: auto-evict least-played offline tracks when storage runs low */
+  storageAutoEvict: boolean
   setPremium: (v: boolean) => void
   setAccent: (a: AccentColor) => void
   setAppTheme: (id: string) => void
@@ -186,6 +192,8 @@ interface SettingsState {
   resetEqProfile: (source: EqSourceKey) => void
   setVisualizer: (v: VisualizerMode) => void
   setDesktopWidget: (v: boolean) => void
+  setLanguage: (l: AppLanguage) => void
+  setStorageAutoEvict: (v: boolean) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -219,6 +227,8 @@ export const useSettings = create<SettingsState>()(
       },
       visualizer: 'bars',
       desktopWidget: false,
+      language: 'en',
+      storageAutoEvict: false,
       // Activating premium switches to the gold theme; deactivating reverts gold → rose.
       setPremium: (premium) =>
         set((s) => ({
@@ -274,6 +284,8 @@ export const useSettings = create<SettingsState>()(
         })),
       setVisualizer: (visualizer) => set({ visualizer }),
       setDesktopWidget: (desktopWidget) => set({ desktopWidget }),
+      setLanguage: (language) => set({ language }),
+      setStorageAutoEvict: (storageAutoEvict) => set({ storageAutoEvict }),
     }),
     {
       name: 'dhun-settings',

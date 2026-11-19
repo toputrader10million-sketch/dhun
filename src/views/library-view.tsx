@@ -58,6 +58,7 @@ import { useLibrary } from '@/store/library'
 import { usePlayer } from '@/store/player'
 import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
+import { useT } from '@/lib/i18n'
 import { AiPlaylistDialog } from '@/components/ai-playlist-dialog'
 import { encodePlaylistCode, decodePlaylistCode, exportPlaylistFile, type PlaylistExport } from '@/lib/playlist-code'
 
@@ -73,6 +74,7 @@ function ShareLinkDialog({
   open: boolean
   onOpenChange: (v: boolean) => void
 }) {
+  const t = useT()
   const [token, setToken] = useState<string | null>(null)
   const [views, setViews] = useState<number | null>(null)
   const [busy, setBusy] = useState<'create' | 'revoke' | null>(null)
@@ -86,9 +88,9 @@ function ShareLinkDialog({
       if (!res.ok || !body.token) throw new Error(body.error ?? 'Failed')
       setToken(body.token)
       setViews(body.views ?? 0)
-      toast.success('Public link ready', { description: 'Anyone with the link can view — read-only.' })
+      toast.success(t('Public link ready'), { description: t('Anyone with the link can view — read-only.') })
     } catch {
-      toast.error('Could not create the link — try again')
+      toast.error(t('Could not create the link — try again'))
     } finally {
       setBusy(null)
     }
@@ -101,9 +103,9 @@ function ShareLinkDialog({
       if (!res.ok) throw new Error()
       setToken(null)
       setViews(null)
-      toast.success('Link revoked', { description: 'The old URL no longer works.' })
+      toast.success(t('Link revoked'), { description: t('The old URL no longer works.') })
     } catch {
-      toast.error('Could not revoke — try again')
+      toast.error(t('Could not revoke — try again'))
     } finally {
       setBusy(null)
     }
@@ -115,18 +117,17 @@ function ShareLinkDialog({
     <Dialog open={open} onOpenChange={(v) => { onOpenChange(v); if (!v) setCopied(false) }}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Public link — {playlistName}</DialogTitle>
+          <DialogTitle>{t('Public link — {0}', [playlistName])}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          A read-only web link anyone can open — no account needed. Viewers can play the tracks
-          or save their own copy. Your account stays private.
+          {t('A read-only web link anyone can open — no account needed. Viewers can play the tracks or save their own copy. Your account stays private.')}
         </p>
         {token ? (
           <>
             <div className="rounded-xl bg-accent/40 p-3">
               <p className="break-all font-mono text-xs select-all" aria-label="Share URL">{url}</p>
               {views !== null && (
-                <p className="mt-1.5 text-[11px] text-muted-foreground">{views} open{views === 1 ? '' : 's'} so far</p>
+                <p className="mt-1.5 text-[11px] text-muted-foreground">{t('{0} opens so far', [views])}</p>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -137,14 +138,14 @@ function ShareLinkDialog({
                   try {
                     await navigator.clipboard.writeText(url)
                     setCopied(true)
-                    toast.success('Link copied')
+                    toast.success(t('Link copied'))
                   } catch {
-                    toast.error('Copy failed — select the link manually')
+                    toast.error(t('Copy failed — select the link manually'))
                   }
                 }}
               >
                 {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                {copied ? 'Copied' : 'Copy link'}
+                {copied ? t('Copied') : t('Copy link')}
               </Button>
               <Button
                 size="sm"
@@ -154,17 +155,17 @@ function ShareLinkDialog({
                 onClick={() => void revoke()}
               >
                 {busy === 'revoke' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2Off className="h-4 w-4" />}
-                Revoke link
+                {t('Revoke link')}
               </Button>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              The link always reflects the playlist as it is right now. Revoking breaks the URL immediately.
+              {t('The link always reflects the playlist as it is right now. Revoking breaks the URL immediately.')}
             </p>
           </>
         ) : (
           <Button className="gap-1.5" disabled={busy === 'create'} onClick={() => void mint()}>
             {busy === 'create' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-            Create public link
+            {t('Create public link')}
           </Button>
         )}
       </DialogContent>
@@ -174,6 +175,7 @@ function ShareLinkDialog({
 
 /** Day 27 — import a playlist from a DHUN1 share code or a JSON export file */
 function ImportPlaylistDialog() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [code, setCode] = useState('')
   const [preview, setPreview] = useState<PlaylistExport | null>(null)
@@ -220,12 +222,12 @@ function ImportPlaylistDialog() {
           if (res.ok) added++
         } catch {}
       }
-      toast.success(`Imported "${preview.name}"`, { description: `${added}/${preview.items.length} songs added.` })
+      toast.success(t('Imported "{0}"', [preview.name]), { description: t('{0}/{1} songs added.', [added, preview.items.length]) })
       setOpen(false)
       reset()
       useLibrary.getState().refreshPlaylists()
     } catch {
-      toast.error('Import failed — could not create the playlist')
+      toast.error(t('Import failed — could not create the playlist'))
     } finally {
       setImporting(false)
     }
@@ -241,16 +243,15 @@ function ImportPlaylistDialog() {
     >
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="rounded-full gap-1.5">
-          <FileUp className="h-4 w-4" /> Import
+          <FileUp className="h-4 w-4" /> {t('Import')}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>Import playlist</DialogTitle>
+          <DialogTitle>{t('Import playlist')}</DialogTitle>
         </DialogHeader>
         <p className="text-xs text-muted-foreground">
-          Paste a Dhun share code (DHUN1…) or open a .dhun.json export file. The playlist is
-          recreated on your account — nothing is overwritten.
+          {t('Paste a Dhun share code (DHUN1…) or open a .dhun.json export file. The playlist is recreated on your account — nothing is overwritten.')}
         </p>
         <Textarea
           value={code}
@@ -261,7 +262,7 @@ function ImportPlaylistDialog() {
         />
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => fileRef.current?.click()}>
-            <FileUp className="h-3.5 w-3.5" /> Open file…
+            <FileUp className="h-3.5 w-3.5" /> {t('Open file…')}
           </Button>
           <input
             ref={fileRef}
@@ -283,11 +284,11 @@ function ImportPlaylistDialog() {
                 const text = await navigator.clipboard.readText()
                 analyze(text)
               } catch {
-                toast.error('Clipboard read blocked — paste manually')
+                toast.error(t('Clipboard read blocked — paste manually'))
               }
             }}
           >
-            <ClipboardPaste className="h-3.5 w-3.5" /> Paste
+            <ClipboardPaste className="h-3.5 w-3.5" /> {t('Paste')}
           </Button>
         </div>
         {error && <p className="text-xs text-destructive">{error}</p>}
@@ -295,14 +296,14 @@ function ImportPlaylistDialog() {
           <div className="rounded-xl bg-accent/40 p-3">
             <p className="text-sm font-medium">{preview.name}</p>
             <p className="text-xs text-muted-foreground">
-              {preview.items.length} songs
-              {preview.items[0] && ` — starts with “${preview.items[0].title.slice(0, 30)}”`}
+              {t('{0} songs', [preview.items.length])}
+              {preview.items[0] && ` — ${t('starts with "{0}"', [preview.items[0].title.slice(0, 30)])}`}
             </p>
           </div>
         )}
         <Button disabled={!preview || importing} onClick={runImport} className="gap-1.5">
           {importing && <Loader2 className="h-4 w-4 animate-spin" />}
-          {importing ? 'Importing…' : preview ? `Import ${preview.items.length} songs` : 'Import'}
+          {importing ? t('Importing…') : preview ? t('Import {0} songs', [preview.items.length]) : t('Import')}
         </Button>
       </DialogContent>
     </Dialog>
@@ -310,6 +311,7 @@ function ImportPlaylistDialog() {
 }
 
 export function LibraryView() {
+  const t = useT()
   const { favorites, history, playlists, loadAll, clearHistory, deletePlaylist } = useLibrary()
   const playItem = usePlayer((s) => s.playItem)
   const offlineItems = useOffline((s) => s.items)
@@ -411,11 +413,11 @@ export function LibraryView() {
                       source: it.source,
                     })),
                   })
-                  toast.success('Playlist file downloaded')
+                  toast.success(t('Playlist file downloaded'))
                   setExportMenu(false)
                 }}
               >
-                <FileDown className="mr-2 h-4 w-4" /> Export as JSON file
+                <FileDown className="mr-2 h-4 w-4" /> {t('Export as JSON file')}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={async () => {
@@ -433,16 +435,16 @@ export function LibraryView() {
                   })
                   try {
                     await navigator.clipboard.writeText(code)
-                    toast.success('Share code copied', {
-                      description: 'Anyone can paste it in Library → Import to recreate this playlist.',
+                    toast.success(t('Share code copied'), {
+                      description: t('Anyone can paste it in Library → Import to recreate this playlist.'),
                     })
                   } catch {
-                    toast.error('Copy failed')
+                    toast.error(t('Copy failed'))
                   }
                   setExportMenu(false)
                 }}
               >
-                <Copy className="mr-2 h-4 w-4" /> Copy share code
+                <Copy className="mr-2 h-4 w-4" /> {t('Copy share code')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -451,7 +453,7 @@ export function LibraryView() {
                   setExportMenu(false)
                 }}
               >
-                <Link2 className="mr-2 h-4 w-4" /> Public link…
+                <Link2 className="mr-2 h-4 w-4" /> {t('Public link…')}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -468,8 +470,8 @@ export function LibraryView() {
         {openPlaylist.items.length === 0 ? (
           <EmptyState
             icon={Music4}
-            title="This playlist is empty"
-            hint="Use the ⋮ menu on any song → “Add to playlist”."
+            title={t('This playlist is empty')}
+            hint={t('Use the ⋮ menu on any song → "Add to playlist".')}
           />
         ) : (
           openPlaylist.items.map((it, i) => {
@@ -511,21 +513,21 @@ export function LibraryView() {
 
   return (
     <div className="px-4 sm:px-6 py-4">
-      <h1 className="text-2xl font-extrabold tracking-tight mb-4">Your Library</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight mb-4">{t('Your Library')}</h1>
       <Tabs defaultValue="favorites" className="w-full">
         <TabsList className="grid w-full max-w-lg grid-cols-4">
           <TabsTrigger value="favorites" className="gap-1.5">
-            <Heart className="h-3.5 w-3.5" /> Favorites
+            <Heart className="h-3.5 w-3.5" /> {t('Favorites')}
             {favorites.length > 0 && <span className="text-[10px] opacity-70">({favorites.length})</span>}
           </TabsTrigger>
           <TabsTrigger value="playlists" className="gap-1.5">
-            <ListMusic className="h-3.5 w-3.5" /> Playlists
+            <ListMusic className="h-3.5 w-3.5" /> {t('Playlists')}
           </TabsTrigger>
           <TabsTrigger value="history" className="gap-1.5">
-            <History className="h-3.5 w-3.5" /> History
+            <History className="h-3.5 w-3.5" /> {t('History')}
           </TabsTrigger>
           <TabsTrigger value="offline" className="gap-1.5">
-            <Download className="h-3.5 w-3.5" /> Offline
+            <Download className="h-3.5 w-3.5" /> {t('Offline')}
             {offlineItems.length > 0 && <span className="text-[10px] opacity-70">({offlineItems.length})</span>}
           </TabsTrigger>
         </TabsList>
@@ -542,15 +544,15 @@ export function LibraryView() {
             <EmptyState
               icon={Heart}
               iconTone="primary"
-              title="No favorites yet"
-              hint="Tap the ♥ on any song (or in the ⋮ menu) to save it here."
+              title={t('No favorites yet')}
+              hint={t('Tap the ♥ on any song (or in the ⋮ menu) to save it here.')}
             />
           ) : (
             <>
               <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm text-muted-foreground">{favorites.length} saved songs</p>
+                <p className="text-sm text-muted-foreground">{t('{0} saved songs', [favorites.length])}</p>
                 <Button size="sm" className="rounded-full" onClick={() => playItem(favoriteItems[0], favoriteItems)}>
-                  Play all
+                  {t('Play all')}
                 </Button>
               </div>
               {favoriteItems.map((item, i) => (
@@ -563,7 +565,7 @@ export function LibraryView() {
         {/* Playlists */}
         <TabsContent value="playlists" className="mt-4">
           <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">{playlists.length} playlists</p>
+            <p className="text-sm text-muted-foreground">{t('{0} playlists', [playlists.length])}</p>
             <div className="flex items-center gap-2">
               <ImportPlaylistDialog />
               <AiPlaylistDialog
@@ -574,18 +576,18 @@ export function LibraryView() {
               <Dialog open={createOpen} onOpenChange={setCreateOpen}>
                 <DialogTrigger asChild>
                   <Button size="sm" className="rounded-full gap-1.5">
-                    <Plus className="h-4 w-4" /> New playlist
+                    <Plus className="h-4 w-4" /> {t('New playlist')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-sm">
                   <DialogHeader>
-                    <DialogTitle>Create playlist</DialogTitle>
+                    <DialogTitle>{t('Create playlist')}</DialogTitle>
                   </DialogHeader>
                   <Input
                     value={newName}
                     onChange={(e) => setNewName(e.target.value)}
-                    placeholder="Playlist name"
-                    aria-label="Playlist name"
+                    placeholder={t('Playlist name')}
+                    aria-label={t('Playlist name')}
                   />
                   <Button
                     onClick={async () => {
@@ -604,8 +606,8 @@ export function LibraryView() {
           {playlists.length === 0 ? (
             <EmptyState
               icon={ListMusic}
-              title="No playlists yet"
-              hint="Create one above — or tap “AI playlist” and just describe the vibe."
+              title={t('No playlists yet')}
+              hint={t('Create one above — or tap "AI playlist" and just describe the vibe.')}
             />
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
@@ -625,7 +627,7 @@ export function LibraryView() {
                       )}
                     </div>
                     <p className="mt-2 truncate text-sm font-medium">{p.name}</p>
-                    <p className="text-xs text-muted-foreground">{p.count} songs</p>
+                    <p className="text-xs text-muted-foreground">{t('{0} songs', [p.count])}</p>
                   </button>
                   <AlertDialog>
                     <AlertDialogTrigger asChild>
@@ -638,18 +640,18 @@ export function LibraryView() {
                     </AlertDialogTrigger>
                     <AlertDialogContent>
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Delete “{p.name}”?</AlertDialogTitle>
+                        <AlertDialogTitle>{t('Delete "{0}"?', [p.name])}</AlertDialogTitle>
                         <AlertDialogDescription>
-                          This removes the playlist and its {p.count} songs from your library.
+                          {t('This removes the playlist and its {0} songs from your library.', [p.count])}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogCancel>{t('Cancel')}</AlertDialogCancel>
                         <AlertDialogAction
                           className="bg-destructive text-white hover:bg-destructive/90"
                           onClick={() => deletePlaylist(p.id)}
                         >
-                          Delete
+                          {t('Delete')}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -663,18 +665,18 @@ export function LibraryView() {
         {/* History */}
         <TabsContent value="history" className="mt-4">
           <div className="mb-2 flex items-center justify-between">
-            <p className="text-sm text-muted-foreground">Recently played</p>
+            <p className="text-sm text-muted-foreground">{t('Recently played')}</p>
             {history.length > 0 && (
               <Button variant="ghost" size="sm" className="text-destructive" onClick={clearHistory}>
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Clear
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {t('Clear')}
               </Button>
             )}
           </div>
           {history.length === 0 ? (
             <EmptyState
               icon={History}
-              title="Nothing played yet"
-              hint="Your listening history will appear here."
+              title={t('Nothing played yet')}
+              hint={t('Your listening history will appear here.')}
             />
           ) : (
             historyItems.map((item, i) => (
@@ -688,12 +690,12 @@ export function LibraryView() {
           <div className="mb-2 flex items-center justify-between">
             <p className="flex items-center gap-2 text-sm text-muted-foreground">
               <HardDrive className="h-3.5 w-3.5" />
-              {offlineItems.length} saved
-              {offlineTotal > 0 && ` • ${(offlineTotal / (1024 * 1024)).toFixed(1)} MB on device`}
+              {t('{0} saved', [offlineItems.length])}
+              {offlineTotal > 0 && ` • ${(offlineTotal / (1024 * 1024)).toFixed(1)} MB ${t('on device')}`}
             </p>
             {offlineItems.length > 0 && (
               <Button variant="ghost" size="sm" className="text-destructive" onClick={() => offlineClear()}>
-                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> Clear all
+                <Trash2 className="mr-1.5 h-3.5 w-3.5" /> {t('Clear all')}
               </Button>
             )}
           </div>
@@ -707,23 +709,23 @@ export function LibraryView() {
             <EmptyState
               icon={Download}
               iconTone="primary"
-              title="No offline downloads"
-              hint="Use the ⋮ menu on any song → “Download for offline”. Saved songs play even without internet."
+              title={t('No offline downloads')}
+              hint={t('Use the ⋮ menu on any song → "Download for offline". Saved songs play even without internet.')}
             />
           ) : (
-            offlineItems.map((t) => {
+            offlineItems.map((ot) => {
               const item: MusicItem = {
-                id: t.trackId,
-                title: t.title,
-                artist: t.artist,
-                artwork: t.artwork || '',
-                duration: t.duration,
-                source: t.source,
+                id: ot.trackId,
+                title: ot.title,
+                artist: ot.artist,
+                artwork: ot.artwork || '',
+                duration: ot.duration,
+                source: ot.source,
               }
-              const prog = offlineProgress[t.trackId]
+              const prog = offlineProgress[ot.trackId]
               return (
                 <div
-                  key={t.trackId}
+                  key={ot.trackId}
                   className="group flex items-center gap-3 rounded-xl p-2 transition-colors hover:bg-accent/60 cursor-pointer"
                   onClick={() => playItem(item)}
                   role="button"
@@ -734,16 +736,16 @@ export function LibraryView() {
                       playItem(item)
                     }
                   }}
-                  aria-label={`Play offline ${t.title}`}
+                  aria-label={`Play offline ${ot.title}`}
                 >
                   <TrackImage item={item} className="h-11 w-11" rounded="rounded-md" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{t.title}</p>
+                    <p className="truncate text-sm font-medium">{ot.title}</p>
                     <p className="truncate text-xs text-muted-foreground">
-                      {t.artist}
-                      {t.size > 0 && ` • ${(t.size / (1024 * 1024)).toFixed(1)} MB`}
-                      {` • ${t.source === 'au' ? 'Audius' : t.source === 'jm' ? 'Jamendo' : 'YouTube'}`}
-                      {t.matchedVia && ` · matched from ${t.matchedVia === 'jamendo' ? 'Jamendo' : 'Audius'}`}
+                      {ot.artist}
+                      {ot.size > 0 && ` • ${(ot.size / (1024 * 1024)).toFixed(1)} MB`}
+                      {` • ${ot.source === 'au' ? 'Audius' : ot.source === 'jm' ? 'Jamendo' : 'YouTube'}`}
+                      {ot.matchedVia && ` · ${t('matched from {0}', [ot.matchedVia === 'jamendo' ? 'Jamendo' : 'Audius'])}`}
                     </p>
                   </div>
                   {prog && (
@@ -752,15 +754,15 @@ export function LibraryView() {
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground tabular-nums shrink-0 hidden sm:block">
-                    {formatDuration(t.duration)}
+                    {formatDuration(ot.duration)}
                   </span>
                   <button
                     onClick={(e) => {
                       e.stopPropagation()
-                      offlineRemove(t.trackId)
+                      offlineRemove(ot.trackId)
                     }}
                     className="rounded-full p-1.5 text-muted-foreground hover:text-destructive hover:bg-accent shrink-0"
-                    aria-label={`Remove offline download ${t.title}`}
+                    aria-label={`Remove offline download ${ot.title}`}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>

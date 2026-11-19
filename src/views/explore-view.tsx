@@ -17,6 +17,7 @@ import type { MusicItem, SearchFilter, SearchResponse, TrackSource } from '@/lib
 import { SEARCH_FILTERS } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
+import { useT } from '@/lib/i18n'
 import { useKeys } from '@/store/keys'
 import { useSettings } from '@/store/settings'
 import { useVoiceSearch, VOICE_LOCALE_BY_REGION, VOICE_ERROR_MESSAGES, type VoiceError } from '@/hooks/use-voice-search'
@@ -60,6 +61,7 @@ function looksLikeNaturalLanguage(q: string): boolean {
 }
 
 export function ExploreView() {
+  const t = useT()
   const [query, setQuery] = useState('')
   const [filter, setFilter] = useState<SearchFilter>('music_songs')
   const [source, setSource] = useState<TrackSource>('yt')
@@ -286,15 +288,15 @@ export function ExploreView() {
           }}
           placeholder={
             voice.listening
-              ? 'Listening… speak now'
+              ? t('Listening… speak now')
               : source === 'au'
-                ? 'Search Audius (indie artists)…'
+                ? t('Search Audius (indie artists)…')
                 : source === 'jm'
-                  ? 'Search Jamendo (Creative Commons)…'
-                  : 'Search songs, artists, albums…'
+                  ? t('Search Jamendo (Creative Commons)…')
+                  : t('Search songs, artists, albums…')
           }
           className="relative pl-10 pr-12 h-11 rounded-xl bg-accent/50 border-0"
-          aria-label="Search music"
+          aria-label={t('Search music')}
         />
         {/* Day 21 — mic button (hidden entirely where Web Speech is unsupported) */}
         {voice.supported && (
@@ -358,14 +360,14 @@ export function ExploreView() {
       {detail ? (
         <>
           <div className="flex items-center gap-3 mb-4">
-            <Button variant="ghost" size="icon" onClick={() => setDetail(null)} aria-label="Back to results">
+            <Button variant="ghost" size="icon" onClick={() => setDetail(null)} aria-label={t('Back to results')}>
               <ArrowLeft className="h-4 w-4" />
             </Button>
             {detail.cover && <TrackImage item={{ artwork: detail.cover, title: detail.title }} className="h-12 w-12" />}
             <h2 className="truncate text-lg font-bold">{detail.title}</h2>
             {detail.items.length > 0 && (
               <Button size="sm" className="ml-auto rounded-full" onClick={() => playItem(detail.items[0], detail.items)}>
-                Play all
+                {t('Play all')}
               </Button>
             )}
           </div>
@@ -391,7 +393,7 @@ export function ExploreView() {
                 )}
                 aria-pressed={source === 'yt'}
               >
-                <Youtube className="h-3.5 w-3.5" /> YouTube
+                <Youtube className="h-3.5 w-3.5" /> {t('YouTube')}
               </button>
               <button
                 onClick={() => {
@@ -405,7 +407,7 @@ export function ExploreView() {
                 )}
                 aria-pressed={source === 'au'}
               >
-                <AudioWaveform className="h-3.5 w-3.5" /> Audius
+                <AudioWaveform className="h-3.5 w-3.5" /> {t('Audius')}
               </button>
               <button
                 onClick={() => {
@@ -420,17 +422,17 @@ export function ExploreView() {
                 )}
                 aria-pressed={source === 'jm'}
               >
-                <KeyRound className="h-3.5 w-3.5" /> Jamendo
+                <KeyRound className="h-3.5 w-3.5" /> {t('Jamendo')}
               </button>
             </div>
             {source === 'au' && (
               <p className="text-[11px] text-muted-foreground">
-                Independent artists — streams directly, no YouTube needed.
+                {t('Independent artists — streams directly, no YouTube needed.')}
               </p>
             )}
             {source === 'jm' && (
               <p className="text-[11px] text-muted-foreground">
-                Creative Commons full tracks — legal downloads for offline.
+                {t('Creative Commons full tracks — legal downloads for offline.')}
               </p>
             )}
           </div>
@@ -514,7 +516,7 @@ export function ExploreView() {
                   {f === 'albums' && <Disc3 className="mr-1 inline h-3 w-3" />}
                   {f === 'artists' && <Users className="mr-1 inline h-3 w-3" />}
                   {f === 'playlists' && <Library className="mr-1 inline h-3 w-3" />}
-                  {FILTER_LABELS[f]}
+                  {FILTER_LABELS[f] ? t(FILTER_LABELS[f]) : FILTER_LABELS[f]}
                 </button>
               ))}
             </div>
@@ -528,13 +530,13 @@ export function ExploreView() {
             (!aiPrompt || aiPrompt !== query.trim()) && (
               <div className="dhun-fade-up mb-4 rounded-2xl border border-dashed border-primary/40 bg-primary/5 p-4">
                 <p className="flex items-center gap-2 text-sm font-semibold">
-                  <Sparkles className="h-4 w-4 text-primary" /> Sounds like you&apos;re describing music
+                  <Sparkles className="h-4 w-4 text-primary" /> {t("Sounds like you're describing music")}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Let Dhun AI read “{query.trim()}” and build the right search plan.
+                  {t('Let Dhun AI read "{0}" and build the right search plan.', [query.trim()])}
                 </p>
                 <Button size="sm" className="mt-3 rounded-full gap-1.5" onClick={() => runAiSearch(query)}>
-                  <Sparkles className="h-3.5 w-3.5" /> Ask Dhun AI
+                  <Sparkles className="h-3.5 w-3.5" /> {t('Ask Dhun AI')}
                 </Button>
               </div>
             )}
@@ -599,8 +601,8 @@ export function ExploreView() {
           {!aiLoading && aiPlan && aiItems.length === 0 && (
             <EmptyState
               icon={ListMusic}
-              title="No tracks matched this vibe"
-              hint="Try rephrasing — e.g. “romantic bangla songs for evening”."
+              title={t('No tracks matched this vibe')}
+              hint={t('Try rephrasing — e.g. "romantic bangla songs for evening".')}
               className="mb-4"
             />
           )}
@@ -626,8 +628,8 @@ export function ExploreView() {
           {results && results.items.length === 0 && !loading && (
             <EmptyState
               icon={ListMusic}
-              title={`No results${query ? ` for “${query}”` : ''}`}
-              hint="Try a different search or another filter — the catalog covers nearly everything on YouTube."
+              title={query ? t('No results for "{0}"', [query]) : t('No results')}
+              hint={t('Try a different search or another filter — the catalog covers nearly everything on YouTube.')}
               className="mt-8"
             />
           )}

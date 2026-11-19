@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/dialog'
 import { TrackImage } from '@/components/track-row'
 import { LyricsPanel } from './lyrics-panel'
+import { useT } from '@/lib/i18n'
 import { HandoffDialog } from './handoff-dialog'
 import { Visualizer } from './visualizer'
 import { usePlayer } from '@/store/player'
@@ -79,6 +80,7 @@ const SLEEP_PRESETS = [15, 30, 45, 60]
  * mode even when this dialog is unmounted.
  */
 function SleepTimerDialog() {
+  const t = useT()
   const togglePlay = usePlayer((s) => s.togglePlay)
   const mode = useSleepTimer((s) => s.mode)
   const endsAt = useSleepTimer((s) => s.endsAt)
@@ -151,7 +153,7 @@ function SleepTimerDialog() {
       <DialogContent className="max-w-xs">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Moon className="h-4 w-4" /> Sleep timer
+            <Moon className="h-4 w-4" /> {t('Sleep timer')}
           </DialogTitle>
         </DialogHeader>
 
@@ -350,6 +352,7 @@ function QueueRow({
 }
 
 export function NowPlaying() {
+  const t = useT()
   const open = useUi((s) => s.nowPlayingOpen)
   const setOpen = (v: boolean) => {
     if (v) openNowPlaying()
@@ -451,7 +454,7 @@ export function NowPlaying() {
           <DrawerTitle className="sr-only">Now playing: {current.title}</DrawerTitle>
           {/* top bar */}
           <div className="flex items-center justify-between px-4 pt-4">
-            <Button variant="ghost" size="icon" onClick={closeNowPlaying} aria-label="Close now playing">
+            <Button variant="ghost" size="icon" onClick={closeNowPlaying} aria-label={t('Close now playing')}>
               <ChevronDown className="h-5 w-5" />
             </Button>
             <div className="flex flex-col items-center">
@@ -564,7 +567,7 @@ export function NowPlaying() {
                         max={100}
                         step={1}
                         onValueChange={(v) => setVolumeRemote(v[0])}
-                        aria-label="Receiver volume"
+                        aria-label={t('Receiver volume')}
                       />
                       <span className="w-8 text-right text-xs tabular-nums text-muted-foreground">{castVolume}</span>
                     </div>
@@ -609,15 +612,15 @@ export function NowPlaying() {
                 }
               }}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
-              aria-label="Share this song"
-              title="Share this song"
+              aria-label={t('Share this song')}
+              title={t('Share this song')}
             >
               <Share2 className="h-5 w-5" />
             </button>
             <button
               onClick={() => toggleFavorite(current)}
               className="inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-95 shrink-0"
-              aria-label="Toggle favorite"
+              aria-label={t('Toggle favorite')}
             >
               <Heart className={cn('h-5 w-5', fav && 'fill-current text-primary')} />
             </button>
@@ -630,7 +633,7 @@ export function NowPlaying() {
               max={Math.max(shownDuration, 1)}
               step={1}
               onValueChange={(v) => seek(v[0])}
-              aria-label="Seek position"
+              aria-label={t('Seek position')}
             />
             <div className="mt-1.5 flex justify-between text-[11px] text-muted-foreground tabular-nums">
               <span>{formatDuration(shownPosition)}</span>
@@ -646,7 +649,7 @@ export function NowPlaying() {
                 'inline-flex h-11 w-11 items-center justify-center rounded-full transition-[background-color,transform] duration-150 hover:bg-accent active:scale-90',
                 shuffle && 'text-primary'
               )}
-              aria-label="Toggle shuffle"
+              aria-label={t('Toggle shuffle')}
             >
               <Shuffle className="h-5 w-5" />
             </button>
@@ -699,7 +702,7 @@ export function NowPlaying() {
             <Popover>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="rounded-full gap-1.5 text-xs">
-                  <Radio className="h-3.5 w-3.5" /> Smart radio
+                  <Radio className="h-3.5 w-3.5" /> {t('Smart radio')}
                 </Button>
               </PopoverTrigger>
               <PopoverContent align="center" className="w-80 max-w-[92vw] rounded-2xl">
@@ -746,10 +749,10 @@ export function NowPlaying() {
             <Tabs defaultValue="lyrics" className="h-full flex flex-col">
               <TabsList className="mx-auto grid w-full max-w-xs grid-cols-2">
                 <TabsTrigger value="lyrics" className="gap-1.5">
-                  <Mic2 className="h-3.5 w-3.5" /> Lyrics
+                  <Mic2 className="h-3.5 w-3.5" /> {t('Lyrics')}
                 </TabsTrigger>
                 <TabsTrigger value="queue" className="gap-1.5">
-                  <ListMusic className="h-3.5 w-3.5" /> Up next
+                  <ListMusic className="h-3.5 w-3.5" /> {t('Up next')}
                   {upNext.length > 0 && (
                     <span className="ml-1 rounded-full bg-primary px-1.5 text-[10px] text-primary-foreground">
                       {upNext.length}

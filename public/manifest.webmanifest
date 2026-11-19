@@ -36,13 +36,39 @@
   "shortcuts": [
     {
       "name": "Search music",
-      "url": "/?view=explore",
-      "short_name": "Search"
+      "short_name": "Search",
+      "url": "/?view=explore"
+    },
+    {
+      "name": "Charts",
+      "short_name": "Charts",
+      "url": "/?view=charts"
     },
     {
       "name": "My Library",
-      "url": "/?view=library",
-      "short_name": "Library"
+      "short_name": "Library",
+      "url": "/?view=library"
+    },
+    {
+      "name": "Play trending",
+      "short_name": "Trending",
+      "url": "/?view=charts&tab=trending"
+    }
+  ],
+  "share_target": {
+    "action": "/?share-target=1",
+    "method": "GET",
+    "enctype": "application/x-www-form-urlencoded",
+    "params": {
+      "title": "title",
+      "text": "text",
+      "url": "url"
+    }
+  },
+  "protocol_handlers": [
+    {
+      "protocol": "web+dhuun",
+      "url": "/?pwa-link=%s"
     }
   ]
 }

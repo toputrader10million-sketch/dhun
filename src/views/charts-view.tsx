@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
+import { useT } from '@/lib/i18n'
 import { useSettings } from '@/store/settings'
 import { cn } from '@/lib/utils'
 
@@ -55,6 +56,7 @@ const REGION_LABELS: Record<string, string> = {
 }
 
 export function ChartsView() {
+  const t = useT()
   const settingsRegion = useSettings((s) => s.region)
   // Local chart-region override; null = follow the Settings region.
   const [regionSel, setRegionSel] = useState<string | null>(null)
@@ -129,19 +131,19 @@ export function ChartsView() {
         <div aria-hidden className="dhun-header-aura pointer-events-none absolute -inset-x-4 -top-10 -bottom-4" />
         <div className="relative flex items-start justify-between gap-3">
           <div>
-            <p className="text-xs text-muted-foreground mb-1">Dhun Charts</p>
+            <p className="text-xs text-muted-foreground mb-1">{t('Dhun Charts')}</p>
             <h1 className="dhun-gradient-text text-2xl sm:text-3xl font-extrabold tracking-tight">
-              What the world is playing
+              {t('What the world is playing')}
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Region charts + indie trending, refreshed hourly.
+              {t('Region charts + indie trending, refreshed hourly.')}
             </p>
           </div>
           <Button
             variant="ghost"
             size="icon"
             onClick={() => setRefreshKey((k) => k + 1)}
-            aria-label="Refresh charts"
+            aria-label={t('Refresh charts')}
             className="shrink-0 transition-[background-color,transform] duration-150 active:scale-90"
           >
             <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
@@ -159,7 +161,7 @@ export function ChartsView() {
           )}
           aria-pressed={mode === 'tops'}
         >
-          <BarChart3 className="h-3.5 w-3.5" /> Top charts
+          <BarChart3 className="h-3.5 w-3.5" /> {t('Top charts')}
         </button>
         <button
           onClick={() => setMode('audius')}
@@ -169,7 +171,7 @@ export function ChartsView() {
           )}
           aria-pressed={mode === 'audius'}
         >
-          <AudioWaveform className="h-3.5 w-3.5" /> Audius
+          <AudioWaveform className="h-3.5 w-3.5" /> {t('Audius')}
         </button>
         <button
           onClick={() => setMode('genre')}
@@ -179,7 +181,7 @@ export function ChartsView() {
           )}
           aria-pressed={mode === 'genre'}
         >
-          Genres
+          {t('Genres')}
         </button>
         <button
           onClick={() => setMode('loved')}
@@ -189,7 +191,7 @@ export function ChartsView() {
           )}
           aria-pressed={mode === 'loved'}
         >
-          <Heart className="h-3.5 w-3.5" /> Loved
+          <Heart className="h-3.5 w-3.5" /> {t('Loved')}
         </button>
       </div>
 
@@ -212,8 +214,8 @@ export function ChartsView() {
           ))}
           <span className="hidden items-center text-[11px] text-muted-foreground sm:flex">
             {mode === 'genre'
-              ? 'Pick a region to flavor the genre chart.'
-              : 'Charts only — your home feed region is in Settings.'}
+              ? t('Pick a region to flavor the genre chart.')
+              : t('Charts only — your home feed region is in Settings.')}
           </span>
         </div>
       )}
@@ -273,11 +275,11 @@ export function ChartsView() {
       {!loading && mode === 'loved' && loved && loved.length === 0 && (
         <EmptyState
           icon={Flame}
-          title="No community loves yet"
+          title={t('No community loves yet')}
           hint={
             lovedUnavailable
-              ? 'The reaction service is warming up — check back later.'
-              : 'Be the first: tap the ♥ on any song you love. Counts are anonymous and aggregated — no accounts, no tracking.'
+              ? t('The reaction service is warming up — check back later.')
+              : t('Be the first: tap the ♥ on any song you love. Counts are anonymous and aggregated — no accounts, no tracking.')
           }
         />
       )}
@@ -285,7 +287,7 @@ export function ChartsView() {
       {!loading && mode === 'loved' && loved && loved.length > 0 && (
         <>
           <TrackCardRow
-            title="Loved by the community — last 30 days"
+            title={t('Loved by the community — last 30 days')}
             items={loved.map((t) => ({
               id: t.trackId,
               title: t.title,
@@ -316,8 +318,8 @@ export function ChartsView() {
       {!loading && mode !== 'loved' && sections.length === 0 && (
         <EmptyState
           icon={BarChart3}
-          title="Charts are warming up"
-          hint="The chart network didn't respond — tap refresh in a moment."
+          title={t('Charts are warming up')}
+          hint={t("The chart network didn't respond — tap refresh in a moment.")}
         />
       )}
 

@@ -22,6 +22,7 @@ import {
   X,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 const FLAG = 'dhun-onboarded'
@@ -78,6 +79,7 @@ function isReturningUser(): boolean {
 }
 
 export function OnboardingTour() {
+  const t = useT()
   const [open, setOpen] = useState(false)
   const [step, setStep] = useState(0)
   const reduceMotion = !!useReducedMotion()
@@ -126,7 +128,7 @@ export function OnboardingTour() {
       className="fixed inset-0 z-[70] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4 sm:items-center"
       role="dialog"
       aria-modal="true"
-      aria-label={`Welcome to Dhun — step ${step + 1} of ${STEPS.length}`}
+      aria-label={t('Welcome to Dhun — step {0} of {1}', [step + 1, STEPS.length])}
     >
       <AnimatePresence mode="wait" initial={false}>
         <motion.div
@@ -144,21 +146,21 @@ export function OnboardingTour() {
               </span>
               <div>
                 <p className="text-[11px] font-semibold uppercase tracking-wide text-primary">
-                  Step {step + 1} of {STEPS.length}
+                  {t('Step {0} of {1}', [step + 1, STEPS.length])}
                 </p>
-                <h2 className="text-lg font-extrabold tracking-tight">{s.title}</h2>
+                <h2 className="text-lg font-extrabold tracking-tight">{t(s.title)}</h2>
               </div>
             </div>
             <button
               onClick={finish}
               className="rounded-full p-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-              aria-label="Skip the tour"
+              aria-label={t('Skip the tour')}
             >
               <X className="h-4 w-4" aria-hidden="true" />
             </button>
           </div>
 
-          <p className="text-sm text-muted-foreground">{s.body}</p>
+          <p className="text-sm text-muted-foreground">{t(s.body)}</p>
 
           <ul className="mt-4 space-y-2.5">
             {s.points.map((p) => {
@@ -166,7 +168,7 @@ export function OnboardingTour() {
               return (
                 <li key={p.text} className="flex items-start gap-2.5 text-sm">
                   <PIcon className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
-                  <span>{p.text}</span>
+                  <span>{t(p.text)}</span>
                 </li>
               )
             })}
@@ -188,11 +190,11 @@ export function OnboardingTour() {
             <div className="flex items-center gap-2">
               {step > 0 && (
                 <Button variant="ghost" size="sm" className="rounded-full" onClick={() => setStep((v) => v - 1)}>
-                  Back
+                  {t('Back')}
                 </Button>
               )}
               <Button size="sm" className="rounded-full gap-1" onClick={() => (step < STEPS.length - 1 ? setStep((v) => v + 1) : finish())}>
-                {step < STEPS.length - 1 ? 'Next' : 'Start listening'}
+                {step < STEPS.length - 1 ? t('Next') : t('Start listening')}
               </Button>
             </div>
           </div>

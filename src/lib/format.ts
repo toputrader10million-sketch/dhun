@@ -51,12 +51,13 @@ export function parseLrc(lrc: string): LrcLine[] {
 }
 
 export function greeting(): string {
+  // English keys — localized via the i18n dictionary (Day 43).
   const h = new Date().getHours()
-  if (h >= 4 && h < 12) return 'শুভ সকাল'
-  if (h >= 12 && h < 16) return 'শুভ দুপুর'
-  if (h >= 16 && h < 19) return 'শুভ বিকেল'
-  if (h >= 19 && h < 22) return 'শুভ সন্ধ্যা'
-  return 'শুভ রাত্রি'
+  if (h >= 4 && h < 12) return 'Good morning'
+  if (h >= 12 && h < 16) return 'Good afternoon'
+  if (h >= 16 && h < 19) return 'Good evening'
+  if (h >= 19 && h < 22) return 'Good night'
+  return 'Good night'
 }
 
 export function cnSafe(...classes: Array<string | false | null | undefined>): string {

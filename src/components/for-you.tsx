@@ -8,6 +8,7 @@
 import { useEffect, useState } from 'react'
 import { Play, Shuffle, Sparkles, RefreshCw, Loader2 } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
+import { useT } from '@/lib/i18n'
 import { TrackImage } from '@/components/track-row'
 import { Button } from '@/components/ui/button'
 import { usePlayer } from '@/store/player'
@@ -21,6 +22,7 @@ interface DailyMixData {
 }
 
 function DailyMixHero({ refreshKey }: { refreshKey: number }) {
+  const t = useT()
   const [mix, setMix] = useState<DailyMixData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const playItem = usePlayer((s) => s.playItem)
@@ -100,9 +102,9 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
                 size="sm"
                 className="rounded-full gap-1.5"
                 onClick={() => playItem(mix.items[0], mix.items)}
-                aria-label="Play daily mix"
+                aria-label={t('Play daily mix')}
               >
-                <Play className="h-4 w-4 fill-current" /> Play mix
+                <Play className="h-4 w-4 fill-current" /> {t('Play mix')}
               </Button>
               <Button
                 size="sm"
@@ -113,9 +115,9 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
                   usePlayer.setState({ shuffle: true })
                   playItem(mix.items[0], mix.items)
                 }}
-                aria-label="Shuffle play daily mix"
+                aria-label={t('Shuffle play daily mix')}
               >
-                <Shuffle className="h-4 w-4" /> Shuffle
+                <Shuffle className="h-4 w-4" /> {t('Shuffle')}
               </Button>
               <Button
                 size="sm"
@@ -129,9 +131,9 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
                     .catch(() => setMix(null))
                     .finally(() => setLoaded(true))
                 }}
-                aria-label="Refresh daily mix"
+                aria-label={t('Refresh daily mix')}
               >
-                <RefreshCw className="h-3.5 w-3.5" /> New mix
+                <RefreshCw className="h-3.5 w-3.5" /> {t('New mix')}
               </Button>
             </div>
           </div>
@@ -142,6 +144,7 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
 }
 
 export function ForYou({ refreshKey }: { refreshKey?: number }) {
+  const t = useT()
   const [sections, setSections] = useState<HomeSection[]>([])
   const [loaded, setLoaded] = useState(false)
   const playItem = usePlayer((s) => s.playItem)
@@ -165,11 +168,11 @@ export function ForYou({ refreshKey }: { refreshKey?: number }) {
   }, [refreshKey])
 
   return (
-    <div aria-label="Made for you">
+    <div aria-label={t('Made for you')}>
       <DailyMixHero refreshKey={refreshKey ?? 0} />
       {!loaded && sections.length === 0 && (
         <div className="mb-8 flex items-center gap-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3.5 w-3.5 animate-spin" /> Building your personal sections…
+          <Loader2 className="h-3.5 w-3.5 animate-spin" /> {t('Building your personal sections…')}
         </div>
       )}
       {sections.map((section) => (

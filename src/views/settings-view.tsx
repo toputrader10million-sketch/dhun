@@ -67,6 +67,9 @@ import { useSmartDownloads, getNetworkSnapshot, subscribeNetwork, getNetworkServ
 import { triggerInstall } from '@/components/pwa/register-sw'
 import { useCast } from '@/lib/cast'
 import { HandoffDialog } from '@/components/player/handoff-dialog'
+import { StorageCard } from '@/components/settings/storage-card'
+import { PerfCard } from '@/components/settings/perf-card'
+import { useT, LANGUAGES } from '@/lib/i18n'
 import type { InstanceStatus } from '@/lib/types'
 import { EQ_FREQUENCIES } from '@/engine/hifi'
 import { cn } from '@/lib/utils'
@@ -110,17 +113,17 @@ function EqSliders({ source, disabled }: { source: EqSourceKey; disabled?: boole
 
 /** Day 25 — full per-source equalizer card */
 function EqualizerCard() {
+  const t = useT()
   const s = useSettings()
   const [source, setSource] = useState<EqSourceKey>('default')
   const profile = s.eqProfiles[source] ?? { preset: 'flat' as EqPreset, gains: EQ_PRESETS.flat }
   return (
     <section aria-label="Equalizer" className="mb-6 rounded-2xl border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
-        <Equal className="h-4 w-4 text-primary" /> Equalizer
+        <Equal className="h-4 w-4 text-primary" /> {t('Equalizer')}
       </h2>
       <p className="text-xs text-muted-foreground mb-4">
-        10-band EQ with a profile per audio source. Audible in Hi-Fi mode and for Audius, Jamendo and
-        offline playback — the YouTube embed player does not expose its audio, so it always plays flat.
+        {t('10-band EQ with a profile per audio source. Audible in Hi-Fi mode and for Audius, Jamendo and offline playback — the YouTube embed player does not expose its audio, so it always plays flat.')}
       </p>
       <div className="mb-4 flex flex-wrap gap-1.5">
         {EQ_SOURCE_KEYS.map((k) => (
@@ -154,20 +157,20 @@ function EqualizerCard() {
           </button>
         ))}
         {profile.preset === 'custom' && (
-          <span className="rounded-full border border-primary/50 bg-accent/60 px-2.5 py-1 text-[11px]">Custom</span>
+          <span className="rounded-full border border-primary/50 bg-accent/60 px-2.5 py-1 text-[11px]">{t('Custom')}</span>
         )}
         <button
           onClick={() => s.resetEqProfile(source)}
           className="ml-auto text-[11px] text-muted-foreground underline underline-offset-2 hover:text-foreground"
         >
-          Reset {EQ_SOURCE_LABELS[source].toLowerCase()}
+          {t('Reset {0}', [EQ_SOURCE_LABELS[source].toLowerCase()])}
         </button>
       </div>
       <EqSliders source={source} disabled={s.playbackMode !== 'hifi' && source === 'yt'} />
       <p className="mt-3 text-[11px] text-muted-foreground">
         {s.playbackMode !== 'hifi'
-          ? 'Switch audio engine to Hi-Fi (Playback above) to hear the EQ on YouTube tracks. Audius, Jamendo and offline playback always honor it.'
-          : 'EQ applies live — changes are heard instantly while a Hi-Fi track plays.'}
+          ? t('Switch audio engine to Hi-Fi (Playback above) to hear the EQ on YouTube tracks. Audius, Jamendo and offline playback always honor it.')
+          : t('EQ applies live — changes are heard instantly while a Hi-Fi track plays.')}
       </p>
     </section>
   )
@@ -184,6 +187,7 @@ const REGIONS = [
 
 /** Day 23 — Smart downloads: keep favorites cached automatically (Wi-Fi aware) */
 function SmartDownloadsCard() {
+  const t = useT()
   const s = useSettings()
   const running = useSmartDownloads((st) => st.running)
   const progress = useSmartDownloads((st) => st.progress)
@@ -194,23 +198,22 @@ function SmartDownloadsCard() {
 
   const netLine =
     !net.online
-      ? 'offline'
+      ? t('offline')
       : net.kind === 'wifi-like'
-        ? `unmetered connection${net.detail ? ` (${net.detail})` : ''}`
+        ? `${t('unmetered connection')}${net.detail ? ` (${net.detail})` : ''}`
         : net.kind === 'metered'
-          ? `metered connection${net.detail ? ` (${net.detail})` : ''}`
-          : `network type unknown${net.detail ? ` (${net.detail})` : ''} in this browser`
+          ? `${t('metered connection')}${net.detail ? ` (${net.detail})` : ''}`
+          : `${t('network type unknown')} ${net.detail ? ` (${net.detail})` : ''}`
 
   return (
     <div className="space-y-3 rounded-xl border bg-accent/20 p-3">
       <div className="flex items-center justify-between gap-4">
         <div className="min-w-0">
           <Label htmlFor="smart-downloads" className="text-xs">
-            Smart downloads
+            {t('Smart downloads')}
           </Label>
           <p className="text-xs text-muted-foreground">
-            Keeps your favorites cached automatically — checks on app start and whenever you come
-            online. Manual downloads are never touched.
+            {t('Keeps your favorites cached automatically — checks on app start and whenever you come online. Manual downloads are never touched.')}
           </p>
         </div>
         <Switch
@@ -218,7 +221,7 @@ function SmartDownloadsCard() {
           checked={s.smartDownloads}
           onCheckedChange={(v) => {
             s.setSmartDownloads(v)
-            if (v) toast('Smart downloads on', { description: 'Favorites will be cached in the background.' })
+            if (v) toast(t('Smart downloads on'), { description: t('Favorites will be cached in the background.') })
           }}
         />
       </div>
@@ -228,18 +231,17 @@ function SmartDownloadsCard() {
           <div className="flex items-center justify-between gap-4">
             <div className="min-w-0">
               <Label htmlFor="smart-wifi-only" className="text-xs">
-                Wi-Fi only
+                {t('Wi-Fi only')}
               </Label>
               <p className="text-xs text-muted-foreground">
-                {netLine}. Honest note: browsers hide exact Wi-Fi info — cellular and slow
-                connections are detected when possible, otherwise treated as unknown.
+                {netLine}. {t('Honest note: browsers hide exact Wi-Fi info — cellular and slow connections are detected when possible, otherwise treated as unknown.')}
               </p>
             </div>
             <Switch id="smart-wifi-only" checked={s.smartWifiOnly} onCheckedChange={s.setSmartWifiOnly} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="smart-limit">Keep up to</Label>
+              <Label htmlFor="smart-limit">{t('Keep up to')}</Label>
             </div>
             <Select value={String(s.smartLimit)} onValueChange={(v) => s.setSmartLimit(Number(v))}>
               <SelectTrigger id="smart-limit" className="w-28">
@@ -248,7 +250,7 @@ function SmartDownloadsCard() {
               <SelectContent>
                 {[10, 20, 30, 40].map((n) => (
                   <SelectItem key={n} value={String(n)}>
-                    {n} tracks
+                    {t('{0} tracks', [n])}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -262,8 +264,12 @@ function SmartDownloadsCard() {
               disabled={running}
               onClick={() => void sweepNow()}
             >
-              {running ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
-              {running ? `Syncing ${progress.done + progress.failed}/${progress.total}…` : 'Sync favorites now'}
+              {running ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5" />
+              )}
+              {running ? t('Syncing {0}/{1}…', [progress.done + progress.failed, progress.total]) : t('Sync favorites now')}
             </Button>
             {running && (
               <Button
@@ -273,23 +279,23 @@ function SmartDownloadsCard() {
                 disabled={s.smartWifiOnly && net?.kind !== 'wifi-like'}
                 onClick={() => void sweepNow({ ignoreWifiRule: true })}
               >
-                Run on this network anyway
+                {t('Run on this network anyway')}
               </Button>
             )}
           </div>
           {lastResult && !running && (
             <p className="text-[11px] text-muted-foreground">
-              Last check {new Date(lastResult.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {t('Last check {0}', [new Date(lastResult.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })])}
               {lastResult.downloaded > 0
-                ? ` — saved ${lastResult.downloaded} track${lastResult.downloaded > 1 ? 's' : ''}`
+                ? ` — ${t('saved {0} tracks', [lastResult.downloaded])}`
                 : lastResult.skipped === 'up-to-date'
-                  ? ' — favorites already cached'
+                  ? ` — ${t('favorites already cached')}`
                   : lastResult.skipped === 'limit-reached'
-                    ? ' — download limit reached'
+                    ? ` — ${t('download limit reached')}`
                     : lastResult.skipped
                       ? ` — ${lastResult.skipped.replace(/-/g, ' ')}`
                       : ''}
-              {offlineCount > 0 && ` • ${offlineCount} on device`}
+              {offlineCount > 0 && ` • ${t('{0} on device', [offlineCount])}`}
             </p>
           )}
         </>
@@ -323,6 +329,7 @@ const ACCENTS: { id: AccentColor; label: string; swatch: string; gold?: boolean 
 ]
 
 export function SettingsView() {
+  const t = useT()
   const { theme, setTheme } = useTheme()
   const s = useSettings()
   const [instances, setInstances] = useState<InstanceStatus[] | null>(null)
@@ -341,6 +348,8 @@ export function SettingsView() {
   const offlineTotal = useOffline((st) => st.totalSize())
   const offlineClear = useOffline((st) => st.clearAll)
   const castAvailable = useCast((st) => st.available)
+  const language = useSettings((st) => st.language)
+  const setLanguage = useSettings((st) => st.setLanguage)
 
   useEffect(() => {
     let alive = true
@@ -394,7 +403,34 @@ export function SettingsView() {
 
   return (
     <div className="px-4 sm:px-6 py-4 max-w-2xl mx-auto pb-16">
-      <h1 className="text-2xl font-extrabold tracking-tight mb-6">Settings</h1>
+      <h1 className="text-2xl font-extrabold tracking-tight mb-6">{t('Settings')}</h1>
+
+      {/* Day 43 — Language switch (English / বাংলা), instant + persisted */}
+      <section aria-label="Language" className="dhun-fade-up mb-6 rounded-2xl border p-4 sm:p-5">
+        <h2 className="mb-1 flex items-center gap-2 font-semibold">
+          <Globe className="h-4 w-4 text-primary" /> {t('Language')}
+        </h2>
+        <p className="mb-4 text-xs text-muted-foreground">{t('Switch the whole app instantly — English or বাংলা.')}</p>
+        <div className="grid grid-cols-2 gap-2 sm:max-w-sm">
+          {LANGUAGES.map((l) => {
+            const active = language === l.id
+            return (
+              <button
+                key={l.id}
+                onClick={() => setLanguage(l.id)}
+                className={cn(
+                  'rounded-xl border p-3 text-left transition-colors',
+                  active ? 'border-primary bg-accent/40 ring-2 ring-primary/50' : 'hover:bg-accent/40'
+                )}
+                aria-pressed={active}
+              >
+                <span className="block text-sm font-bold">{l.native}</span>
+                <span className="block text-[10px] text-muted-foreground">{l.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </section>
 
       {/* Dhun Premium */}
       <section
@@ -412,15 +448,14 @@ export function SettingsView() {
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <h2 className="bg-gradient-to-r from-[oklch(0.5_0.11_65)] via-[oklch(0.68_0.14_85)] to-[oklch(0.5_0.11_60)] bg-clip-text text-base font-bold text-transparent">
-                  Dhun Premium
+                  {t('Dhun Premium')}
                 </h2>
                 <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                  Free forever
+                  {t('Free forever')}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">
-                Unlock the gold theme, animated visuals &amp; priority experience — free forever, no
-                payment.
+                {t('Unlock the gold theme, animated visuals & priority experience — free forever, no payment.')}
               </p>
             </div>
           </div>
@@ -430,12 +465,12 @@ export function SettingsView() {
                 onClick={() => s.setPremium(true)}
                 className="dhun-shimmer gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 font-semibold text-amber-950 shadow-md shadow-amber-500/25 hover:from-amber-300 hover:to-yellow-400"
               >
-                <Crown className="h-4 w-4 fill-current" /> Activate Premium
+                <Crown className="h-4 w-4 fill-current" /> {t('Activate Premium')}
               </Button>
             ) : (
               <>
                 <span className="dhun-shimmer inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-1.5 text-xs font-bold text-amber-950 shadow-md shadow-amber-500/25">
-                  <Crown className="h-4 w-4 fill-current" /> Premium active
+                  <Crown className="h-4 w-4 fill-current" /> {t('Premium active')}
                 </span>
                 <Button
                   variant="ghost"
@@ -443,7 +478,7 @@ export function SettingsView() {
                   className="rounded-full text-muted-foreground"
                   onClick={() => s.setPremium(false)}
                 >
-                  Deactivate
+                  {t('Deactivate')}
                 </Button>
               </>
             )}
@@ -454,47 +489,47 @@ export function SettingsView() {
       {/* Themes (pro theme engine) — above the accent controls */}
       <section aria-label="Themes" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-semibold">
-          <Palette className="h-4 w-4 text-primary" /> Themes
+          <Palette className="h-4 w-4 text-primary" /> {t('Themes')}
         </h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          Curated dark-tuned looks — applied instantly. Your accent color stays on top.
+          {t('Curated dark-tuned looks — applied instantly. Your accent color stays on top.')}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          {APP_THEMES.map((t) => {
-            const active = s.appTheme === t.id
+          {APP_THEMES.map((th) => {
+            const active = s.appTheme === th.id
             return (
               <button
-                key={t.id}
-                onClick={() => s.setAppTheme(t.id)}
+                key={th.id}
+                onClick={() => s.setAppTheme(th.id)}
                 className={cn(
                   'rounded-xl border p-2 text-left transition-colors',
                   active
                     ? 'border-primary bg-accent/40 ring-2 ring-primary/50'
                     : 'hover:bg-accent/40'
                 )}
-                aria-label={`Theme ${t.name}${active ? ' (selected)' : ''}`}
+                aria-label={`Theme ${th.name}${active ? ' (selected)' : ''}`}
                 aria-pressed={active}
-                title={t.description}
+                title={th.description}
               >
                 {/* Mini mockup painted from the theme's preview colors */}
                 <div
                   className="rounded-lg p-2.5"
-                  style={{ backgroundColor: t.from }}
+                  style={{ backgroundColor: th.from }}
                   aria-hidden
                 >
                   <div className="mb-1.5 flex items-center gap-1.5">
-                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: t.to }} />
+                    <span className="h-3 w-3 rounded-full" style={{ backgroundColor: th.to }} />
                     <span className="h-1.5 w-12 rounded-full bg-white/25" />
                   </div>
                   <span className="mb-1.5 block h-1.5 w-3/4 rounded-full bg-white/15" />
                   <span className="mb-2 block h-1.5 w-1/2 rounded-full bg-white/10" />
                   <div className="flex gap-1.5">
-                    <span className="h-2.5 w-7 rounded-full" style={{ backgroundColor: t.to }} />
+                    <span className="h-2.5 w-7 rounded-full" style={{ backgroundColor: th.to }} />
                     <span className="h-2.5 w-7 rounded-full bg-white/15" />
                   </div>
                 </div>
                 <div className="mt-2 flex items-center justify-between gap-1 px-0.5">
-                  <span className="truncate text-xs font-medium">{t.name}</span>
+                  <span className="truncate text-xs font-medium">{th.name}</span>
                   {active && <Check className="h-3.5 w-3.5 shrink-0 text-primary" aria-hidden />}
                 </div>
               </button>
@@ -506,13 +541,13 @@ export function SettingsView() {
       {/* Appearance */}
       <section aria-label="Appearance" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
-          <Waves className="h-4 w-4 text-primary" /> Appearance
+          <Waves className="h-4 w-4 text-primary" /> {t('Appearance')}
         </h2>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="theme-select">Theme</Label>
-              <p className="text-xs text-muted-foreground">Dark is recommended for listening at night.</p>
+              <Label htmlFor="theme-select">{t('Theme')}</Label>
+              <p className="text-xs text-muted-foreground">{t('Dark is recommended for listening at night.')}</p>
             </div>
             <Select value={theme} onValueChange={setTheme}>
               <SelectTrigger id="theme-select" className="w-36">
@@ -520,21 +555,21 @@ export function SettingsView() {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="dark">
-                  <Moon className="mr-1 inline h-3.5 w-3.5" /> Dark
+                  <Moon className="mr-1 inline h-3.5 w-3.5" /> {t('Dark')}
                 </SelectItem>
                 <SelectItem value="light">
-                  <Sun className="mr-1 inline h-3.5 w-3.5" /> Light
+                  <Sun className="mr-1 inline h-3.5 w-3.5" /> {t('Light')}
                 </SelectItem>
                 <SelectItem value="system">
-                  <Monitor className="mr-1 inline h-3.5 w-3.5" /> System
+                  <Monitor className="mr-1 inline h-3.5 w-3.5" /> {t('System')}
                 </SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label>Accent color</Label>
-              <p className="text-xs text-muted-foreground">Used across the app UI.</p>
+              <Label>{t('Accent color')}</Label>
+              <p className="text-xs text-muted-foreground">{t('Used across the app UI.')}</p>
             </div>
             <div className="flex gap-2">
               {ACCENTS.map((a) =>
@@ -601,7 +636,7 @@ export function SettingsView() {
                   Custom accent
                 </Label>
                 <p className="text-xs text-muted-foreground">
-                  Pick any color — shades adapt to light/dark automatically.
+                  {t('Pick any color — shades adapt to light/dark automatically.')}
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -643,8 +678,8 @@ export function SettingsView() {
             </div>
             <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
               <div className="min-w-0">
-                <Label className="text-xs">Gradient presets</Label>
-                <p className="text-xs text-muted-foreground">Two-tone accents blended across the UI.</p>
+                <Label className="text-xs">{t('Gradient presets')}</Label>
+                <p className="text-xs text-muted-foreground">{t('Two-tone accents blended across the UI.')}</p>
               </div>
               <div className="flex flex-wrap items-center gap-1.5">
                 {ACCENT_GRADIENTS.map((g) => {
@@ -682,16 +717,14 @@ export function SettingsView() {
       {/* Playback */}
       <section aria-label="Playback" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
-          <Zap className="h-4 w-4 text-primary" /> Playback
+          <Zap className="h-4 w-4 text-primary" /> {t('Playback')}
         </h2>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="mode-select">Audio engine</Label>
+              <Label htmlFor="mode-select">{t('Audio engine')}</Label>
               <p className="text-xs text-muted-foreground">
-                Stable: YouTube&apos;s official player — most reliable, shows a small visible video
-                bubble (required by YouTube). Hi-Fi: direct audio stream with equalizer — best
-                quality when available, falls back automatically.
+                {t('Stable: YouTube\'s official player — most reliable, shows a small visible video bubble (required by YouTube). Hi-Fi: direct audio stream with equalizer — best quality when available, falls back automatically.')}
               </p>
             </div>
             <Select value={s.playbackMode} onValueChange={(v: any) => s.setPlaybackMode(v)}>
@@ -699,26 +732,25 @@ export function SettingsView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="iframe">Stable</SelectItem>
-                <SelectItem value="hifi">Hi-Fi (beta)</SelectItem>
+                <SelectItem value="iframe">{t('Stable')}</SelectItem>
+                <SelectItem value="hifi">{t('Hi-Fi (beta)')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="gapless-toggle">Gapless playback</Label>
+              <Label htmlFor="gapless-toggle">{t('Gapless playback')}</Label>
               <p className="text-xs text-muted-foreground">
-                Pre-buffers the next track so queue transitions are seamless. Active in Hi-Fi mode
-                (direct streams, offline copies and Audius).
+                {t('Pre-buffers the next track so queue transitions are seamless. Active in Hi-Fi mode (direct streams, offline copies and Audius).')}
               </p>
             </div>
             <Switch id="gapless-toggle" checked={s.gaplessPlayback} onCheckedChange={s.setGaplessPlayback} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="crossfade-select">Crossfade</Label>
+              <Label htmlFor="crossfade-select">{t('Crossfade')}</Label>
               <p className="text-xs text-muted-foreground">
-                Fades the ending track out and the next one in — smooth radio-style transitions in Hi-Fi mode.
+                {t('Fades the ending track out and the next one in — smooth radio-style transitions in Hi-Fi mode.')}
               </p>
             </div>
             <Select
@@ -729,7 +761,7 @@ export function SettingsView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">Off</SelectItem>
+                <SelectItem value="0">{t('Off')}</SelectItem>
                 <SelectItem value="2">2s</SelectItem>
                 <SelectItem value="4">4s</SelectItem>
                 <SelectItem value="6">6s</SelectItem>
@@ -739,8 +771,8 @@ export function SettingsView() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="region-select">Music region</Label>
-              <p className="text-xs text-muted-foreground">Curates your home feed.</p>
+              <Label htmlFor="region-select">{t('Music region')}</Label>
+              <p className="text-xs text-muted-foreground">{t('Curates your home feed.')}</p>
             </div>
             <Select value={s.region} onValueChange={s.setRegion}>
               <SelectTrigger id="region-select" className="w-36">
@@ -773,10 +805,9 @@ export function SettingsView() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="visualizer-select">Now Playing visualizer</Label>
+              <Label htmlFor="visualizer-select">{t('Now Playing visualizer')}</Label>
               <p className="text-xs text-muted-foreground">
-                Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube
-                embed player does not expose audio data, so it plays without a visualizer.
+                {t('Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube embed player does not expose audio data, so it plays without a visualizer.')}
               </p>
             </div>
             <Select value={s.visualizer} onValueChange={(v: VisualizerMode) => s.setVisualizer(v)}>
@@ -784,25 +815,25 @@ export function SettingsView() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="off">Off</SelectItem>
-                <SelectItem value="bars">Bars</SelectItem>
-                <SelectItem value="wave">Wave</SelectItem>
-                <SelectItem value="ring">Ring</SelectItem>
+                <SelectItem value="off">{t('Off')}</SelectItem>
+                <SelectItem value="bars">{t('Bars')}</SelectItem>
+                <SelectItem value="wave">{t('Wave')}</SelectItem>
+                <SelectItem value="ring">{t('Ring')}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="desktop-widget">Desktop mini widget</Label>
+              <Label htmlFor="desktop-widget">{t('Desktop mini widget')}</Label>
               <p className="text-xs text-muted-foreground">
-                A floating compact player with a live spectrum in the corner of the screen (desktop).
+                {t('A floating compact player with a live spectrum in the corner of the screen (desktop).')}
               </p>
             </div>
             <Switch id="desktop-widget" checked={s.desktopWidget} onCheckedChange={s.setDesktopWidget} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="mini-art">Show art in mini player</Label>
+              <Label htmlFor="mini-art">{t('Show art in mini player')}</Label>
             </div>
             <Switch id="mini-art" checked={s.showMiniArt} onCheckedChange={s.setShowMiniArt} />
           </div>
@@ -812,23 +843,23 @@ export function SettingsView() {
       {/* Lyrics (Day 12) */}
       <section aria-label="Lyrics" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-1 flex items-center gap-2 font-semibold">
-          <Mic2 className="h-4 w-4 text-primary" /> Lyrics
+          <Mic2 className="h-4 w-4 text-primary" /> {t('Lyrics')}
         </h2>
         <p className="text-xs text-muted-foreground mb-4">
-          Karaoke mode highlights the line you&apos;re on with a live sweep. Sizes apply to synced lyrics.
+          {t('Karaoke mode highlights the line you\'re on with a live sweep. Sizes apply to synced lyrics.')}
         </p>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="karaoke-toggle">Karaoke mode</Label>
-              <p className="text-xs text-muted-foreground">Big centered active line that fills as the song plays.</p>
+              <Label htmlFor="karaoke-toggle">{t('Karaoke mode')}</Label>
+              <p className="text-xs text-muted-foreground">{t('Big centered active line that fills as the song plays.')}</p>
             </div>
             <Switch id="karaoke-toggle" checked={s.lyricsKaraoke} onCheckedChange={s.setLyricsKaraoke} />
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="lyrics-size">Lyric text size</Label>
-              <p className="text-xs text-muted-foreground">Normal mode line size (karaoke active line is larger).</p>
+              <Label htmlFor="lyrics-size">{t('Lyric text size')}</Label>
+              <p className="text-xs text-muted-foreground">{t('Normal mode line size (karaoke active line is larger).')}</p>
             </div>
             <Select
               value={s.lyricsFontSize}
@@ -856,7 +887,7 @@ export function SettingsView() {
       <section aria-label="Cloud sync" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-semibold">
-            <CloudUpload className="h-4 w-4 text-primary" /> Cloud Sync
+            <CloudUpload className="h-4 w-4 text-primary" /> {t('Cloud Sync')}
           </h2>
           {sync && (
             <span className="rounded-full bg-emerald-500/15 text-emerald-500 text-[10px] font-semibold px-2.5 py-1">
@@ -865,18 +896,17 @@ export function SettingsView() {
           )}
         </div>
         <p className="text-xs text-muted-foreground mb-4">
-          Favorites, playlists এবং history ক্লাউডে (Turso) সেভ হয়। অন্য ডিভাইসে একই sync code দিলেই
-          পুরো লাইব্রেরি সেখানেও দেখা যাবে।
+          {t('Favorites, playlists and history are saved to the cloud (Turso). Enter the same sync code on another device and your whole library shows up there too.')}
         </p>
         {syncLoading ? (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" /> Connecting…
+            <Loader2 className="h-4 w-4 animate-spin" /> {t('Connecting…')}
           </div>
         ) : sync ? (
           <div className="space-y-4">
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-xl border bg-accent/40 px-4 py-2">
-                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">Sync code</p>
+                <p className="text-[10px] uppercase tracking-wide text-muted-foreground mb-0.5">{t('Sync code')}</p>
                 <p className="font-mono text-lg font-bold tracking-[0.2em] text-primary">{sync.user.code}</p>
               </div>
               <Button
@@ -886,24 +916,24 @@ export function SettingsView() {
                 onClick={() => {
                   navigator.clipboard
                     .writeText(sync.user.code)
-                    .then(() => toast.success('Sync code copied'))
-                    .catch(() => toast.error('Copy failed'))
+                    .then(() => toast.success(t('Sync code copied')))
+                    .catch(() => toast.error(t('Copy failed')))
                 }}
               >
-                <Copy className="h-3.5 w-3.5" /> Copy
+                <Copy className="h-3.5 w-3.5" /> {t('Copy')}
               </Button>
               <Dialog>
                 <DialogTrigger asChild>
                   <Button variant="outline" size="sm" className="rounded-full gap-1.5">
-                    <Link2 className="h-3.5 w-3.5" /> Link another device
+                    <Link2 className="h-3.5 w-3.5" /> {t('Link another device')}
                   </Button>
                 </DialogTrigger>
                 <DialogContent className="max-w-sm">
                   <DialogHeader>
-                    <DialogTitle>Link a device</DialogTitle>
+                    <DialogTitle>{t('Link a device')}</DialogTitle>
                   </DialogHeader>
                   <p className="text-xs text-muted-foreground">
-                    অন্য ডিভাইসের Settings-এ দেখানো sync code লিখুন — সেই লাইব্রেরি এই ডিভাইসে চলে আসবে।
+                    {t('Enter the sync code shown in Settings on your other device — that library will come over to this one.')}
                   </p>
                   <Input
                     value={linkCode}
@@ -923,18 +953,18 @@ export function SettingsView() {
                           body: JSON.stringify({ code: linkCode.trim() }),
                         })
                         if (!res.ok) throw new Error()
-                        toast.success('Device linked — loading library…')
+                        toast.success(t('Device linked — loading library…'))
                         setLinkCode('')
                         loadSync()
                         useLibrary.getState().loadAll()
                       } catch {
-                        toast.error('Invalid sync code')
+                        toast.error(t('Invalid sync code'))
                       } finally {
                         setLinking(false)
                       }
                     }}
                   >
-                    {linking ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null} Link this device
+                    {linking ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : null} {t('Link this device')}
                   </Button>
                 </DialogContent>
               </Dialog>
@@ -942,9 +972,9 @@ export function SettingsView() {
 
             <div className="grid grid-cols-3 gap-2 max-w-sm">
               {[
-                { label: 'Favorites', value: sync.counts.favorites, icon: Heart },
-                { label: 'Playlists', value: sync.counts.playlists, icon: Save },
-                { label: 'History', value: sync.counts.history, icon: RadioTower },
+                { label: t('Favorites'), value: sync.counts.favorites, icon: Heart },
+                { label: t('Playlists'), value: sync.counts.playlists, icon: Save },
+                { label: t('History'), value: sync.counts.history, icon: RadioTower },
               ].map((c) => (
                 <div key={c.label} className="rounded-xl border p-3 text-center">
                   <c.icon className="mx-auto h-3.5 w-3.5 text-muted-foreground mb-1" />
@@ -972,11 +1002,11 @@ export function SettingsView() {
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ name: deviceName.trim() }),
                   })
-                  toast.success('Device name saved')
+                  toast.success(t('Device name saved'))
                   loadSync()
                 }}
               >
-                Save name
+                {t('Save name')}
               </Button>
               <Button
                 variant="outline"
@@ -992,13 +1022,13 @@ export function SettingsView() {
                     a.download = `dhun-backup-${new Date().toISOString().slice(0, 10)}.json`
                     a.click()
                     URL.revokeObjectURL(a.href)
-                    toast.success('Backup downloaded')
+                    toast.success(t('Backup downloaded'))
                   } catch {
-                    toast.error('Export failed')
+                    toast.error(t('Export failed'))
                   }
                 }}
               >
-                Export backup
+                {t('Export backup')}
               </Button>
               <Button
                 variant="outline"
@@ -1006,7 +1036,7 @@ export function SettingsView() {
                 className="rounded-full"
                 onClick={() => importFileRef.current?.click()}
               >
-                Import backup
+                {t('Import backup')}
               </Button>
               <input
                 ref={importFileRef}
@@ -1027,17 +1057,17 @@ export function SettingsView() {
                     if (!res.ok) throw new Error()
                     const r = d?.resolved
                     toast.success(
-                      `Imported: ${d?.imported?.favorites ?? 0} favorites, ${d?.imported?.playlists ?? 0} playlists`,
+                      t('Imported: {0} favorites, {1} playlists', [d?.imported?.favorites ?? 0, d?.imported?.playlists ?? 0]),
                       {
                         description: r
-                          ? `Conflict rules applied: ${r.favoritesKept} favorites + ${r.playlistsKept} playlists kept from the cloud, ${r.playlistsAppended} playlists merged.`
+                          ? t('Conflict rules applied: {0} favorites + {1} playlists kept from the cloud, {2} playlists merged.', [r.favoritesKept, r.playlistsKept, r.playlistsAppended])
                           : undefined,
                       }
                     )
                     useLibrary.getState().loadAll()
                     loadSync()
                   } catch {
-                    toast.error('Import failed — invalid backup file')
+                    toast.error(t('Import failed — invalid backup file'))
                   } finally {
                     e.target.value = ''
                   }
@@ -1049,11 +1079,9 @@ export function SettingsView() {
             <div className="rounded-xl bg-accent/30 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="min-w-0">
-                  <Label className="text-xs">Conflict rules (import backup)</Label>
+                  <Label className="text-xs">{t('Conflict rules (import backup)')}</Label>
                   <p className="text-[11px] text-muted-foreground mt-0.5">
-                    Merge: imported data wins, same-name playlists skipped. Local wins: missing
-                    tracks are appended to same-name playlists. Cloud wins: existing cloud rows are
-                    never touched. Favorites/history always dedupe per song.
+                    {t('Merge: imported data wins, same-name playlists skipped. Local wins: missing tracks are appended to same-name playlists. Cloud wins: existing cloud rows are never touched. Favorites/history always dedupe per song.')}
                   </p>
                 </div>
                 <Select
@@ -1064,26 +1092,25 @@ export function SettingsView() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="merge">Merge (safe)</SelectItem>
-                    <SelectItem value="local">Local wins</SelectItem>
-                    <SelectItem value="cloud">Cloud wins</SelectItem>
+                    <SelectItem value="merge">{t('Merge (safe)')}</SelectItem>
+                    <SelectItem value="local">{t('Local wins')}</SelectItem>
+                    <SelectItem value="cloud">{t('Cloud wins')}</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
             <div className="mt-1 rounded-xl bg-accent/30 p-3">
-              <p className="text-xs font-medium mb-1.5">Cross-device queue handoff</p>
+              <p className="text-xs font-medium mb-1.5">{t('Cross-device queue handoff')}</p>
               <p className="text-[11px] text-muted-foreground mb-2.5">
-                Send this device&apos;s queue to your other devices and continue listening exactly
-                where you left off — same track, same position.
+                {t('Send this device\'s queue to your other devices and continue listening exactly where you left off — same track, same position.')}
               </p>
               <HandoffDialog variant="button" />
             </div>
           </div>
         ) : (
           <div className="rounded-xl bg-destructive/10 p-3 text-sm">
-            Could not reach the sync service — library stays on this device until it recovers.
+            {t('Could not reach the sync service — library stays on this device until it recovers.')}
           </div>
         )}
       </section>
@@ -1092,18 +1119,18 @@ export function SettingsView() {
       <section aria-label="Offline downloads" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-semibold">
-            <HardDrive className="h-4 w-4 text-primary" /> Offline downloads
+            <HardDrive className="h-4 w-4 text-primary" /> {t('Offline downloads')}
           </h2>
           <span className="text-xs text-muted-foreground tabular-nums">
-            {offlineItems.length} tracks • {offlineTotal > 0 ? `${(offlineTotal / (1024 * 1024)).toFixed(1)} MB` : '0 MB'}
+            {offlineItems.length} {t('tracks')} • {offlineTotal > 0 ? `${(offlineTotal / (1024 * 1024)).toFixed(1)} MB` : '0 MB'}
           </span>
         </div>
         <div className="space-y-4">
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="auto-offline">Auto-cache favorites</Label>
+              <Label htmlFor="auto-offline">{t('Auto-cache favorites')}</Label>
               <p className="text-xs text-muted-foreground">
-                নতুন favorite সেভ করলেই সেটি ডিভাইসে ডাউনলোড হয়ে যাবে (offline playback)।
+                {t('New favorites are downloaded to the device automatically (offline playback).')}
               </p>
             </div>
             <Switch
@@ -1122,14 +1149,14 @@ export function SettingsView() {
               className="rounded-full gap-1.5"
               disabled={offlineItems.length === 0}
               onClick={() => {
-                offlineClear().then(() => toast.success('All downloads removed'))
+                offlineClear().then(() => toast.success(t('All downloads removed')))
               }}
             >
-              <Trash2 className="h-4 w-4" /> Remove all downloads
+              <Trash2 className="h-4 w-4" /> {t('Remove all downloads')}
             </Button>
           </div>
           <p className="text-[11px] text-muted-foreground">
-            Downloads live only on this device (Cache Storage). Offline playback uses the Hi-Fi engine.
+            {t('Downloads live only on this device (Cache Storage). Offline playback uses the Hi-Fi engine.')}
           </p>
         </div>
       </section>
@@ -1138,7 +1165,7 @@ export function SettingsView() {
       <section aria-label="Network" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <div className="mb-4 flex items-center justify-between">
           <h2 className="flex items-center gap-2 font-semibold">
-            <RadioTower className="h-4 w-4 text-primary" /> Music network
+            <RadioTower className="h-4 w-4 text-primary" /> {t('Music network')}
           </h2>
           <Button
             variant="outline"
@@ -1146,11 +1173,11 @@ export function SettingsView() {
             className="rounded-full gap-1.5"
             onClick={() => useUi.getState().setView('network')}
           >
-            <Activity className="h-3.5 w-3.5" /> Health dashboard
+            <Activity className="h-3.5 w-3.5" /> {t('Health dashboard')}
           </Button>
         </div>
         {instances === null ? (
-          <p className="text-xs text-muted-foreground">Testing music network instances…</p>
+          <p className="text-xs text-muted-foreground">{t('Testing music network instances…')}</p>
         ) : (
           <ul className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             {instances.map((inst) => (
@@ -1163,19 +1190,19 @@ export function SettingsView() {
                   <span className="truncate">{inst.name}</span>
                 </span>
                 <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                  {inst.ok ? `${inst.latencyMs} ms` : 'down'}
+                  {inst.ok ? `${inst.latencyMs} ms` : t('down')}
                 </span>
               </li>
             ))}
           </ul>
         )}
         <p className="mt-3 text-[11px] text-muted-foreground">
-          Dhun automatically falls back between free community instances. Playback always uses
-          YouTube&apos;s official embedded player. Cast:{' '}
+          {t("Dhun automatically falls back between free community instances. Playback always uses YouTube's official embedded player.")}{' '}
+          {t('Cast')}:{' '}
           {castAvailable ? (
-            <span className="text-emerald-500 font-medium">available — look for the cast icon in the player</span>
+            <span className="text-emerald-500 font-medium">{t('available — look for the cast icon in the player')}</span>
           ) : (
-            <span>open Dhun in Chrome/Edge on the same Wi-Fi as your Chromecast</span>
+            <span>{t('open Dhun in Chrome/Edge on the same Wi-Fi as your Chromecast')}</span>
           )}
           .
         </p>
@@ -1184,7 +1211,7 @@ export function SettingsView() {
       {/* App */}
       <section aria-label="App" className="mb-6 rounded-2xl border p-4 sm:p-5">
         <h2 className="mb-4 flex items-center gap-2 font-semibold">
-          <Download className="h-4 w-4 text-primary" /> App
+          <Download className="h-4 w-4 text-primary" /> {t('App')}
         </h2>
         <div className="flex flex-wrap gap-2">
           <Button
@@ -1192,18 +1219,24 @@ export function SettingsView() {
             onClick={async () => {
               const res = await triggerInstall()
               if (res === 'unavailable')
-                toast.info('Install from browser menu', {
-                  description: 'Chrome/Edge: ⋮ → “Install app”. iOS: Share → Add to Home Screen.',
+                toast.info(t('Install from browser menu'), {
+                  description: t('Chrome/Edge: ⋮ → "Install app". iOS: Share → Add to Home Screen.'),
                 })
             }}
           >
-            <Download className="h-4 w-4" /> Install Dhun
+            <Download className="h-4 w-4" /> {t('Install Dhun')}
           </Button>
           <Button variant="outline" className="rounded-full gap-1.5" onClick={clearCache}>
-            <Trash2 className="h-4 w-4" /> Clear offline cache
+            <Trash2 className="h-4 w-4" /> {t('Clear offline cache')}
           </Button>
         </div>
       </section>
+
+      {/* Day 47 — performance budget against live device metrics */}
+      <PerfCard />
+
+      {/* Day 48 — storage manager: quota, cache inventory, LRU auto-evict */}
+      <StorageCard />
 
       <Separator className="my-6" />
 
@@ -1213,11 +1246,9 @@ export function SettingsView() {
         </div>
         <p className="font-semibold text-foreground">Dhun v1.1</p>
         <p className="mt-1 max-w-sm mx-auto">
-          A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog),
-          LRCLIB (synced lyrics), iTunes (artwork) and YouTube&apos;s official embedded player. Cloud sync on
-          Turso, offline downloads, Chromecast. No ads, no tracking.
+          {t('A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog), LRCLIB (synced lyrics), iTunes (artwork) and YouTube\'s official embedded player. Cloud sync on Turso, offline downloads, Chromecast. No ads, no tracking.')}
         </p>
-        <p className="mt-2">Made with ♥ for listeners</p>
+        <p className="mt-2">{t('Made with ♥ for listeners')}</p>
       </section>
     </div>
   )

@@ -12,6 +12,7 @@ import { Compass } from 'lucide-react'
 import { TrackCardRow } from '@/components/track-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/empty-state'
+import { useT } from '@/lib/i18n'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 
@@ -27,6 +28,7 @@ interface DiscoverResponse {
 }
 
 export function DiscoveryFeed() {
+  const t = useT()
   const [data, setData] = useState<DiscoverResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const playItem = usePlayer((s) => s.playItem)
@@ -72,7 +74,7 @@ export function DiscoveryFeed() {
 
   if (loading) {
     return (
-      <div className="mb-6 space-y-6" aria-label="Discovery feed loading">
+      <div className="mb-6 space-y-6" aria-label={t('Discovery feed loading')}>
         <div className="flex gap-4 overflow-hidden">
           {[...Array(5)].map((_, i) => (
             <Skeleton key={i} className="h-44 w-36 sm:w-40 shrink-0 rounded-xl" />
@@ -84,18 +86,18 @@ export function DiscoveryFeed() {
 
   if (sections.length === 0) {
     return (
-      <div className="mb-6" aria-label="Discovery feed empty">
+      <div className="mb-6" aria-label={t('Discovery feed empty')}>
         <EmptyState
           icon={Compass}
-          title="Discover more"
-          hint="Play a few songs and this feed starts recommending — or just search above."
+          title={t('Discover more')}
+          hint={t('Play a few songs and this feed starts recommending — or just search above.')}
         />
       </div>
     )
   }
 
   return (
-    <div className="mb-6 space-y-2" aria-label="Discovery feed">
+    <div className="mb-6 space-y-2" aria-label={t('Discovery feed')}>
       {sections.map((s, i) => (
         <div key={s.title} className="dhun-fade-up" style={{ animationDelay: `${i * 80}ms` }}>
           <TrackCardRow
