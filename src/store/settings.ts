@@ -8,6 +8,9 @@ export type LyricsFontSize = 'sm' | 'md' | 'lg' | 'xl'
 /** Day 43 — UI language (English source / বাংলা) */
 export type AppLanguage = 'en' | 'bn'
 
+/** Day 53 — how Dhun Pro was unlocked (the tier is free-for-now, so this is honest bookkeeping) */
+export type ProVia = 'instant' | 'loyalty' | 'feedback' | 'code'
+
 /** Day 26 — Now Playing visualizer styles */
 export type VisualizerMode = 'off' | 'bars' | 'wave' | 'ring'
 
@@ -100,6 +103,8 @@ export interface AppThemeInfo {
   from: string
   /** Preview swatch: accent color */
   to: string
+  /** Day 51 — themes beyond the two free ones are part of Dhun Pro */
+  pro?: boolean
 }
 
 /**
@@ -107,14 +112,17 @@ export interface AppThemeInfo {
  * live in globals.css under `html[data-app-theme='...']`. "midnight-rose" is
  * the default and intentionally has no CSS block (inherits :root/.dark).
  * Accents (--primary/--ring) still apply on top of any theme.
+ * Day 51 tier split: midnight-rose + mono-pro stay free; the rest (incl.
+ * Imperial Gold, Day 54) are Pro surfaces with an honest unlock sheet.
  */
 export const APP_THEMES: AppThemeInfo[] = [
   { id: 'midnight-rose', name: 'Midnight Rose', description: 'Zinc black with a rose glow', from: '#09090b', to: '#f43f5e' },
-  { id: 'aurora', name: 'Aurora', description: 'Deep slate teal, mint light', from: '#0f1a20', to: '#2dd4bf' },
-  { id: 'sunset', name: 'Sunset', description: 'Warm maroon dusk, coral amber', from: '#1f1310', to: '#fb923c' },
-  { id: 'forest', name: 'Forest', description: 'Green-black canopy, moss emerald', from: '#0d1512', to: '#34d399' },
-  { id: 'neon-night', name: 'Neon Night', description: 'Violet blackout, magenta neon', from: '#130d1a', to: '#e879f9' },
   { id: 'mono-pro', name: 'Mono Pro', description: 'Pure monochrome, silver contrast', from: '#0b0b0d', to: '#d4d4d8' },
+  { id: 'imperial-gold', name: 'Imperial Gold', description: 'Obsidian black with gold undertones', from: '#141210', to: '#f5b73c', pro: true },
+  { id: 'aurora', name: 'Aurora', description: 'Deep slate teal, mint light', from: '#0f1a20', to: '#2dd4bf', pro: true },
+  { id: 'sunset', name: 'Sunset', description: 'Warm maroon dusk, coral amber', from: '#1f1310', to: '#fb923c', pro: true },
+  { id: 'forest', name: 'Forest', description: 'Green-black canopy, moss emerald', from: '#0d1512', to: '#34d399', pro: true },
+  { id: 'neon-night', name: 'Neon Night', description: 'Violet blackout, magenta neon', from: '#130d1a', to: '#e879f9', pro: true },
 ]
 
 /** Hand-picked gradient presets for the accent designer (Day 9) */
@@ -145,6 +153,10 @@ interface SettingsState {
   maxBitrate: number // 0 = no cap
   showMiniArt: boolean
   premium: boolean
+  /** Day 53: unlock method for Pro ('instant' | 'loyalty' | 'feedback' | 'code') */
+  proVia: ProVia | null
+  /** Day 53: epoch ms when Pro was activated (member-since in the Pro panel) */
+  proSince: number | null
   /** Day 12: karaoke-style lyrics mode (big centered active line) */
   lyricsKaraoke: boolean
   /** Day 12: lyric text size */
@@ -168,6 +180,10 @@ interface SettingsState {
   /** Day 48: auto-evict least-played offline tracks when storage runs low */
   storageAutoEvict: boolean
   setPremium: (v: boolean) => void
+  /** Day 53: activate Pro with the unlock method recorded */
+  activatePro: (via: ProVia) => void
+  /** Day 53: deactivate and clear the unlock record */
+  deactivatePro: () => void
   setAccent: (a: AccentColor) => void
   setAppTheme: (id: string) => void
   setCustomAccent: (hex: string | null) => void
@@ -213,6 +229,8 @@ export const useSettings = create<SettingsState>()(
       maxBitrate: 0,
       showMiniArt: true,
       premium: false,
+      proVia: null,
+      proSince: null,
       lyricsKaraoke: false,
       lyricsFontSize: 'md',
       autoMix: true,
@@ -236,6 +254,23 @@ export const useSettings = create<SettingsState>()(
           accent: premium ? 'gold' : s.accent === 'gold' ? 'rose' : s.accent,
           // Gold must be visible: a pending custom accent/gradient yields to it.
           ...(premium ? { customAccent: null, accentGradient: null } : {}),
+        })),
+      // Day 53 — activation records how + when (shown honestly in the Pro panel).
+      activatePro: (via) =>
+        set((s) => ({
+          premium: true,
+          proVia: via,
+          proSince: s.proSince ?? Date.now(),
+          accent: 'gold',
+          customAccent: null,
+          accentGradient: null,
+        })),
+      deactivatePro: () =>
+        set((s) => ({
+          premium: false,
+          proVia: null,
+          proSince: null,
+          accent: s.accent === 'gold' ? 'rose' : s.accent,
         })),
       // Picking a named accent clears any custom accent/gradient.
       setAccent: (accent) => set({ accent, customAccent: null, accentGradient: null }),

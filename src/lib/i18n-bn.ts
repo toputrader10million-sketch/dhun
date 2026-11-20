@@ -511,4 +511,103 @@ export const BN: Record<string, string> = {
   'Sleep timer': 'স্লিপ টাইমার',
   'Sleep timer done': 'স্লিপ টাইমার শেষ',
   'Playback paused — sleep well.': 'প্লেব্যাক থামানো হয়েছে — ভালো ঘুম।',
+
+  // ---------- Days 51-57 — Dhun Pro tier ----------
+  'Dhun Pro': 'Dhun Pro',
+  'Pro is active': 'Pro চালু আছে',
+  'Unlock Dhun Pro': 'Dhun Pro আনলক করুন',
+  'Unlock Pro': 'Pro আনলক করুন',
+  'Activate Pro — free': 'Pro চালু করুন — ফ্রি',
+  'Pro is already active': 'Pro ইতিমধ্যে চালু আছে',
+  'Active': 'চালু',
+  'Deactivate Pro': 'Pro বন্ধ করুন',
+  'Dhun Pro is on': 'Dhun Pro চালু হয়েছে',
+  'Everything stays free — Pro adds comfort. Thank you for supporting Dhun.':
+    'সব কিছু ফ্রি থাকবে — Pro শুধু আরাম যোগ করে। Dhun সমর্থনের জন্য ধন্যবাদ।',
+  '{0} is part of Dhun Pro.': '{0} Dhun Pro-র অংশ।',
+  'Comfort features that keep Dhun beautiful — while every core thing stays free.':
+    'Dhun সুন্দর রাখার আরামদায়ক ফিচার — যখন প্রতিটা মূল জিনিস ফ্রি থাকে।',
+  'No payment exists in Dhun. Core playback, search, playlists, lyrics and downloads are free forever.':
+    'Dhun-এ কোনো পেমেন্ট নেই। মূল প্লেব্যাক, সার্চ, প্লেলিস্ট, লিরিক্স ও ডাউনলোড চিরকাল ফ্রি।',
+  'What Pro adds': 'Pro যা যোগ করে',
+  'Theme engine': 'থিম ইঞ্জিন',
+  'AI DJ · Daily Mix': 'AI DJ · ডেইলি মিক্স',
+  'AI playlist builder': 'AI প্লেলিস্ট বিল্ডার',
+  'EQ Pro': 'EQ Pro',
+  'Visualizer Pro': 'ভিজ্যুয়ালাইজার Pro',
+  'Public share-links': 'পাবলিক শেয়ার-লিংক',
+  'Accent designer': 'অ্যাকসেন্ট ডিজাইনার',
+  'Aurora, Sunset, Forest, Neon Night + Imperial Gold — curated dark-tuned looks.':
+    'Aurora, Sunset, Forest, Neon Night + Imperial Gold — বাছাই করা ডার্ক লুক।',
+  'A personal 28-track mix composed from your history + favorites, refreshed hourly.':
+    'আপনার হিস্ট্রি + favorites থেকে তৈরি ২৮-ট্র্যাক ব্যক্তিগত মিক্স, ঘণ্টায় রিফ্রেশ।',
+  'Describe a vibe in Bangla or English — get a playable 25-track playlist.':
+    'বাংলা বা English-এ ভাইব বলুন — প্লেয়েবল ২৫-ট্র্যাক প্লেলিস্ট পান।',
+  'Per-source equalizer (YouTube / Audius / Jamendo) with custom band gains.':
+    'প্রতি-সোর্স ইকুয়ালাইজার (YouTube / Audius / Jamendo) কাস্টম ব্যান্ড গেইন সহ।',
+  'Wave and Ring audio-reactive art (Bars stays free for everyone).':
+    'Wave ও Ring অডিও-রিঅ্যাক্টিভ আর্ট (Bars সবার জন্য ফ্রি)।',
+  'Publish any playlist with a read-only link + view counter.':
+    'যেকোনো প্লেলিস্ট read-only লিংক + ভিউ কাউন্টার দিয়ে পাবলিশ করুন।',
+  'Custom hex accents + two-tone gradients across the whole UI.':
+    'কাস্টম hex অ্যাকসেন্ট + দুই-রঙা গ্রেডিয়েন্ট পুরো UI-তে।',
+  'Settings → Themes': 'Settings → Themes',
+  'Home → Made for you': 'Home → Made for you',
+  'Library → AI playlist': 'Library → AI playlist',
+  'Settings → Equalizer': 'Settings → Equalizer',
+  'Settings → Playback': 'Settings → Playback',
+  'Library → playlist ⋮ menu': 'Library → playlist ⋮ মেনু',
+  'Settings → Accent color': 'Settings → Accent color',
+  'Unlock by loyalty': 'লয়ালটি দিয়ে আনলক',
+  'Listen to {0} tracks across {1}+ days and Dhun mints a personal unlock code for you.':
+    '{0}+ দিনে {1} ট্র্যাক শুনলে Dhun আপনার জন্য ব্যক্তিগত আনলক কোড তৈরি করবে।',
+  'Plays': 'প্লে',
+  'Active days': 'সক্রিয় দিন',
+  'Mint my loyalty code': 'আমার লয়ালটি কোড তৈরি করুন',
+  'My unlock code': 'আমার আনলক কোড',
+  'Use this code': 'এই কোড ব্যবহার করুন',
+  'Code copied': 'কোড কপি হয়েছে',
+  'Unlock by feedback': 'ফিডব্যাক দিয়ে আনলক',
+  'Tell us what you love or what to fix — feedback unlocks Pro as a thank-you.':
+    'কী ভালো লাগে বা কী ঠিক করতে হবে বলুন — ফিডব্যাক ধন্যবাদ হিসেবে Pro আনলক করবে।',
+  'What do you love? What should we fix?': 'কী ভালো লাগে? কী ঠিক করা দরকার?',
+  'Your feedback': 'আপনার ফিডব্যাক',
+  'Send feedback & unlock': 'ফিডব্যাক পাঠিয়ে আনলক করুন',
+  'Feedback saved locally': 'ফিডব্যাক লোকাল সেভ হয়েছে',
+  'Dhun has no servers for feedback — your note stays on this device. Thank you!':
+    'ফিডব্যাকের জন্য Dhun-এর কোনো সার্ভার নেই — আপনার নোট এই ডিভাইসেই থাকবে। ধন্যবাদ!',
+  'A thank-you for helping Dhun improve.': 'Dhun উন্নত করতে সাহায্যের জন্য ধন্যবাদ।',
+  'Thank you! Pro unlocked — your feedback stays on this device.':
+    'ধন্যবাদ! Pro আনলক হয়েছে — আপনার ফিডব্যাক এই ডিভাইসেই থাকবে।',
+  'Have an unlock code?': 'আনলক কোড আছে?',
+  'Unlock code': 'আনলক কোড',
+  'Verify': 'যাচাই',
+  'Codes look like DHUN-XXXXX-XXXXXX.': 'কোড দেখতে DHUN-XXXXX-XXXXXX-এর মতো হয়।',
+  'That code does not verify — check the characters.': 'কোডটা যাচাই হয়নি — অক্ষরগুলো দেখুন।',
+  'Instant unlock': 'তাৎক্ষণিক আনলক',
+  'Loyalty code': 'লয়ালটি কোড',
+  'Feedback thank-you': 'ফিডব্যাক ধন্যবাদ',
+  'Pro unlocked via {0} — since {1}. Every core feature stays free for everyone.':
+    '{0} দিয়ে Pro আনলক — {1} থেকে। প্রতিটা মূল ফিচার সবার জন্য ফ্রি থাকবে।',
+  'today': 'আজ',
+  'Comfort features for daily listeners — activate free, earn a loyalty code, or send feedback. No payment exists.':
+    'প্রতিদিনের শ্রোতাদের জন্য আরামদায়ক ফিচার — ফ্রি চালু করুন, লয়ালটি কোড অর্জন করুন বা ফিডব্যাক দিন। কোনো পেমেন্ট নেই।',
+  'Loyalty progress toward a free unlock code': 'ফ্রি আনলক কোডের দিকে লয়ালটি অগ্রগতি',
+  'Earned — mint your code in the Pro sheet': 'অর্জিত — Pro শিটে কোড তৈরি করুন',
+  '{0}/{1} plays': '{0}/{1} প্লে',
+  '{0}/{1} days': '{0}/{1} দিন',
+  'Your usage — counted on this device': 'আপনার ব্যবহার — এই ডিভাইসে গণনা করা',
+  'Usage dashboard': 'ব্যবহার ড্যাশবোর্ড',
+  'Tracks played': 'শোনা ট্র্যাক',
+  'Listening streak': 'শোনার ধারা',
+  '{0} day{1}': '{0} দিন',
+  'Offline tracks': 'অফলাইন ট্র্যাক',
+  'Artists (recent)': 'শিল্পী (সাম্প্রতিক)',
+  'Minutes (recent)': 'মিনিট (সাম্প্রতিক)',
+  'Curated dark-tuned looks — applied instantly. Your accent color stays on top. Midnight Rose and Mono Pro are free; the rest are part of the Pro theme engine.':
+    'বাছাই করা ডার্ক-টিউনড লুক — তাৎক্ষণিক প্রয়োগ। অ্যাকসেন্ট রঙ ওপরে থাকে। Midnight Rose ও Mono Pro ফ্রি; বাকিগুলো Pro থিম ইঞ্জিনের অংশ।',
+  'Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube embed player does not expose audio data, so it plays without a visualizer. Bars is free; Wave and Ring are Pro.':
+    'Hi-Fi, Audius, Jamendo ও অফলাইন প্লেব্যাকে লাইভ অডিও-রিঅ্যাক্টিভ আর্ট। YouTube embed প্লেয়ার অডিও ডেটা দেয় না, তাই সেখানে ভিজ্যুয়ালাইজার ছাড়া চলে। Bars ফ্রি; Wave ও Ring Pro।',
+  'Everything included': 'সব অন্তর্ভুক্ত',
+  'Free forever — no ads, no tracking, no payment': 'চিরকাল ফ্রি — কোনো বিজ্ঞাপন, ট্র্যাকিং বা পেমেন্ট নেই',
 }

@@ -17,6 +17,7 @@ import { useKeys } from './keys'
 import { audioUrlFor, touchOfflinePlayed } from '@/lib/offline'
 import { useCast } from '@/lib/cast'
 import { useSleepTimer } from '@/lib/sleep-timer'
+import { trackPlay } from '@/lib/usage-stats'
 import type { AudioStream } from '@/lib/types'
 
 export type RepeatMode = 'off' | 'all' | 'one'
@@ -140,6 +141,8 @@ export const usePlayer = create<PlayerState>()(
       const current = () => get().queue[get().index] ?? null
 
       function sideEffects(item: MusicItem) {
+        // Day 55 — lifetime play counter (usage dashboard + loyalty unlock)
+        trackPlay()
         // Fire-and-forget: hi-res artwork upgrade + history record (safe offline)
         if (item.source !== 'au') {
           fetch(`/api/artwork?title=${encodeURIComponent(item.title)}&artist=${encodeURIComponent(item.artist)}`)

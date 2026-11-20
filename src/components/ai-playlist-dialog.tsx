@@ -4,14 +4,17 @@
  * catalog → save as a real playlist in the user's library.
  * Honest progress UI: composing → resolving (x/N) → saving. */
 import { useRef, useState } from 'react'
-import { Loader2, Sparkles, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, Sparkles, CheckCircle2, XCircle, Crown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Progress } from '@/components/ui/progress'
 import { toast } from 'sonner'
 import type { MusicItem } from '@/lib/types'
 import { useLibrary } from '@/store/library'
+import { useSettings as useSettingsStore } from '@/store/settings'
+import { useProSheet } from '@/components/premium/pro-sheet'
+import { useT } from '@/lib/i18n'
 import { cn } from '@/lib/utils'
 
 interface PlaylistSpec {
@@ -32,6 +35,24 @@ const EXAMPLES = [
 ]
 
 const RESOLVE_CONCURRENCY = 4
+
+/** Day 52 — trigger for the builder: opens the Pro sheet when not unlocked. */
+function GateTrigger({ onPro }: { onPro: () => void }) {
+  const t = useT()
+  const premium = useSettingsStore((s) => s.premium)
+  const openSheet = useProSheet((s) => s.openSheet)
+  return (
+    <Button
+      size="sm"
+      variant="outline"
+      className="rounded-full gap-1.5"
+      onClick={() => (premium ? onPro() : openSheet('ai-playlist'))}
+    >
+      <Sparkles className="h-4 w-4 text-primary" /> {t('AI playlist')}
+      {!premium && <Crown className="h-3 w-3 fill-current text-amber-500" aria-hidden />}
+    </Button>
+  )
+}
 
 export function AiPlaylistDialog({ onCreated }: { onCreated?: (playlistId: string) => void }) {
   const [open, setOpen] = useState(false)
@@ -154,11 +175,9 @@ export function AiPlaylistDialog({ onCreated }: { onCreated?: (playlistId: strin
         if (!v && busy) canceledRef.current = true
       }}
     >
-      <DialogTrigger asChild>
-        <Button size="sm" variant="outline" className="rounded-full gap-1.5">
-          <Sparkles className="h-4 w-4 text-primary" /> AI playlist
-        </Button>
-      </DialogTrigger>
+      {/* Day 52 — AI playlist builder is a Pro surface: the trigger opens the
+          honest upsell sheet for free users, the builder dialog for Pro. */}
+      <GateTrigger onPro={() => setOpen(true)} />
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">

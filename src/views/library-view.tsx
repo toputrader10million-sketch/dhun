@@ -60,6 +60,8 @@ import { useOffline } from '@/store/offline'
 import { formatDuration } from '@/lib/format'
 import { useT } from '@/lib/i18n'
 import { AiPlaylistDialog } from '@/components/ai-playlist-dialog'
+import { useProSheet } from '@/components/premium/pro-sheet'
+import { useSettings } from '@/store/settings'
 import { encodePlaylistCode, decodePlaylistCode, exportPlaylistFile, type PlaylistExport } from '@/lib/playlist-code'
 
 /** Day 34 — create / copy / revoke a public read-only share link for a playlist */
@@ -449,6 +451,11 @@ export function LibraryView() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
+                  // Day 52 — public share-links are a Cloud-extras Pro surface.
+                  if (!useSettings.getState().premium) {
+                    useProSheet.getState().openSheet('cloud-share')
+                    return
+                  }
                   setShareLinkOpen(true)
                   setExportMenu(false)
                 }}

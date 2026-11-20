@@ -1,9 +1,11 @@
 'use client'
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { useTheme } from 'next-themes'
+import { useReducedMotion } from 'framer-motion'
 import {
   Activity,
   Check,
+  CheckCircle2,
   Download,
   Equal,
   Globe,
@@ -69,6 +71,11 @@ import { useCast } from '@/lib/cast'
 import { HandoffDialog } from '@/components/player/handoff-dialog'
 import { StorageCard } from '@/components/settings/storage-card'
 import { PerfCard } from '@/components/settings/perf-card'
+// Day 52-55 — Pro tier surface (upsell sheet, badges, animated crown, stats)
+import { ProSheet, useProSheet } from '@/components/premium/pro-sheet'
+import { ProBadge, ProCrown, ProLockChip, useProAction } from '@/components/premium/pro-badge'
+import { PRO_FEATURES } from '@/lib/premium'
+import { useUsageStats, loyaltyStatus } from '@/lib/usage-stats'
 import { useT, LANGUAGES } from '@/lib/i18n'
 import type { InstanceStatus } from '@/lib/types'
 import { EQ_FREQUENCIES } from '@/engine/hifi'
@@ -117,6 +124,9 @@ function EqualizerCard() {
   const s = useSettings()
   const [source, setSource] = useState<EqSourceKey>('default')
   const profile = s.eqProfiles[source] ?? { preset: 'flat' as EqPreset, gains: EQ_PRESETS.flat }
+  // Day 52 — per-source profiles are EQ Pro; the default (all-audio) profile stays free.
+  const proAction = useProAction()
+  const pickSource = (k: EqSourceKey) => proAction('eq-pro', () => setSource(k))
   return (
     <section aria-label="Equalizer" className="mb-6 rounded-2xl border p-4 sm:p-5">
       <h2 className="mb-1 flex items-center gap-2 font-semibold">
@@ -126,19 +136,23 @@ function EqualizerCard() {
         {t('10-band EQ with a profile per audio source. Audible in Hi-Fi mode and for Audius, Jamendo and offline playback — the YouTube embed player does not expose its audio, so it always plays flat.')}
       </p>
       <div className="mb-4 flex flex-wrap gap-1.5">
-        {EQ_SOURCE_KEYS.map((k) => (
-          <button
-            key={k}
-            onClick={() => setSource(k)}
-            className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
-              source === k ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
-            )}
-            aria-pressed={source === k}
-          >
-            {EQ_SOURCE_LABELS[k]}
-          </button>
-        ))}
+        {EQ_SOURCE_KEYS.map((k) => {
+          const locked = k !== 'default' && !s.premium
+          return (
+            <button
+              key={k}
+              onClick={pickSource(k)}
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-medium transition-colors',
+                source === k ? 'bg-primary text-primary-foreground' : 'bg-accent hover:bg-accent/70'
+              )}
+              aria-pressed={source === k}
+            >
+              {EQ_SOURCE_LABELS[k]}
+              {locked && <Crown className="h-3 w-3 fill-current text-amber-500" aria-hidden />}
+            </button>
+          )
+        })}
       </div>
       <div className="mb-4 flex flex-wrap gap-1.5">
         {EQ_PRESET_LIST.map((p) => (
@@ -328,10 +342,183 @@ const ACCENTS: { id: AccentColor; label: string; swatch: string; gold?: boolean 
   },
 ]
 
+/** Day 55 — Dhun Pro panel: tier status, honest usage stats, feature matrix. */
+function ProPanel() {
+  const t = useT()
+  const s = useSettings()
+  const openSheet = useProSheet((st) => st.openSheet)
+  const stats = useUsageStats()
+  const loyalty = loyaltyStatus(stats ?? undefined)
+  const pro = s.premium
+
+  const viaLabel: Record<string, string> = {
+    instant: t('Instant unlock'),
+    loyalty: t('Loyalty code'),
+    feedback: t('Feedback thank-you'),
+    code: t('Unlock code'),
+  }
+
+  const statTiles: Array<{ label: string; value: string | number; icon: typeof Crown }> = [
+    { label: t('Tracks played'), value: stats?.playedLifetime ?? 0, icon: Activity },
+    { label: t('Active days'), value: stats?.daysActive ?? 0, icon: Heart },
+    {
+      label: t('Listening streak'),
+      value: stats ? t('{0} day{1}', [String(stats.streak), stats.streak === 1 ? '' : 's']) : '0',
+      icon: Heart,
+    },
+    { label: t('Favorites'), value: stats?.favorites ?? 0, icon: Heart },
+    { label: t('Playlists'), value: stats?.playlists ?? 0, icon: Heart },
+    { label: t('Offline tracks'), value: stats?.offlineTracks ?? 0, icon: HardDrive },
+    { label: t('Artists (recent)'), value: stats?.artistsRecent ?? 0, icon: Mic2 },
+    { label: t('Minutes (recent)'), value: stats?.minutesRecent ?? 0, icon: Activity },
+  ]
+
+  return (
+    <section
+      aria-label="Dhun Pro"
+      className="dhun-fade-up mb-6 rounded-2xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] via-[oklch(0.78_0.15_85)] to-[oklch(0.6_0.12_60)] p-[1.5px] shadow-lg shadow-amber-500/10"
+    >
+      <div className="rounded-[calc(var(--radius-lg)-1px)] bg-card p-4 sm:p-5">
+        {/* Tier hero */}
+        <div className="flex items-start gap-3">
+          <span
+            className="dhun-shimmer flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] to-[oklch(0.64_0.13_70)] shadow-md shadow-amber-500/25"
+            aria-hidden
+          >
+            <ProCrown active={pro} size={22} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="bg-gradient-to-r from-[oklch(0.5_0.11_65)] via-[oklch(0.68_0.14_85)] to-[oklch(0.5_0.11_60)] bg-clip-text text-base font-bold text-transparent">
+                {t('Dhun Pro')}
+              </h2>
+              {pro ? (
+                <span className="dhun-shimmer rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-2 py-0.5 text-[10px] font-bold text-amber-950">
+                  {t('Active')}
+                </span>
+              ) : (
+                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
+                  {t('Free forever')}
+                </span>
+              )}
+            </div>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {pro
+                ? t('Pro unlocked via {0} — since {1}. Every core feature stays free for everyone.', [
+                    viaLabel[s.proVia ?? 'instant'],
+                    s.proSince ? new Date(s.proSince).toLocaleDateString() : t('today'),
+                  ])
+                : t('Comfort features for daily listeners — activate free, earn a loyalty code, or send feedback. No payment exists.')}
+            </p>
+          </div>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {!pro ? (
+            <Button
+              onClick={() => openSheet()}
+              className="dhun-shimmer gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 font-semibold text-amber-950 shadow-md shadow-amber-500/25 hover:from-amber-300 hover:to-yellow-400"
+            >
+              <Crown className="h-4 w-4 fill-current" /> {t('Unlock Pro')}
+            </Button>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="rounded-full text-muted-foreground"
+              onClick={() => s.deactivatePro()}
+            >
+              {t('Deactivate Pro')}
+            </Button>
+          )}
+        </div>
+
+        {/* Loyalty progress (free users) */}
+        {!pro && (
+          <div className="mt-3 rounded-xl border bg-muted/30 p-3">
+            <div className="flex items-center justify-between text-[11px] text-muted-foreground">
+              <span>{t('Loyalty progress toward a free unlock code')}</span>
+              <span>{loyalty.earned ? t('Earned — mint your code in the Pro sheet') : `${Math.round((loyalty.playsPct + loyalty.daysPct) / 2)}%`}</span>
+            </div>
+            <div className="mt-2 grid grid-cols-2 gap-2">
+              <div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 transition-all" style={{ width: `${loyalty.playsPct}%` }} />
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {t('{0}/{1} plays', [String(loyalty.plays), '25'])}
+                </p>
+              </div>
+              <div>
+                <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+                  <div className="h-full rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 transition-all" style={{ width: `${loyalty.daysPct}%` }} />
+                </div>
+                <p className="mt-1 text-[10px] text-muted-foreground">
+                  {t('{0}/{1} days', [String(loyalty.days), '3'])}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Usage stats dashboard */}
+        <div className="mt-4" aria-label={t('Usage dashboard')}>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('Your usage — counted on this device')}
+          </h3>
+          <div className="grid grid-cols-2 xs:grid-cols-4 gap-2">
+            {statTiles.map((tile) => (
+              <div key={tile.label} className="rounded-xl border bg-muted/20 p-2.5 text-center">
+                <p className="text-lg font-extrabold tabular-nums leading-none">{tile.value}</p>
+                <p className="mt-1 flex items-center justify-center gap-1 text-[10px] text-muted-foreground">
+                  <tile.icon className="h-2.5 w-2.5" aria-hidden /> {tile.label}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Feature matrix */}
+        <div className="mt-4" aria-label={t('What Pro adds')}>
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('What Pro adds')}
+          </h3>
+          <ul className="grid gap-1.5 sm:grid-cols-2">
+            {PRO_FEATURES.map((f) => (
+              <li key={f.id}>
+                <button
+                  onClick={() => openSheet(f.id)}
+                  className="flex w-full items-center gap-2 rounded-xl border p-2.5 text-left text-xs transition-colors hover:bg-accent/40"
+                >
+                  {pro ? (
+                    <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-emerald-500" aria-hidden />
+                  ) : (
+                    <Crown className="h-3.5 w-3.5 shrink-0 fill-current text-amber-500" aria-hidden />
+                  )}
+                  <span className="min-w-0">
+                    <span className="block font-semibold">{f.name}</span>
+                    <span className="block truncate text-[10px] text-muted-foreground">{f.location}</span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  )
+}
+
 export function SettingsView() {
   const t = useT()
   const { theme, setTheme } = useTheme()
   const s = useSettings()
+  const openProSheet = useProSheet((st) => st.openSheet)
+  // Day 52 — accent designer (custom hex + gradients) is a Pro surface
+  const proAction = useProAction()
+  // Day 56 — crown watermark respects reduced motion
+  const reduceMotion = !!useReducedMotion()
   const [instances, setInstances] = useState<InstanceStatus[] | null>(null)
   const [testing, setTesting] = useState(true)
   // Cloud sync state
@@ -432,59 +619,8 @@ export function SettingsView() {
         </div>
       </section>
 
-      {/* Dhun Premium */}
-      <section
-        aria-label="Dhun Premium"
-        className="dhun-fade-up mb-6 rounded-2xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] via-[oklch(0.78_0.15_85)] to-[oklch(0.6_0.12_60)] p-[1.5px] shadow-lg shadow-amber-500/10"
-      >
-        <div className="rounded-[calc(var(--radius-lg)-1px)] bg-card p-4 sm:p-5">
-          <div className="flex items-start gap-3">
-            <span
-              className="dhun-shimmer flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-[oklch(0.88_0.13_95)] to-[oklch(0.64_0.13_70)] shadow-md shadow-amber-500/25"
-              aria-hidden
-            >
-              <Crown className="h-5 w-5 fill-current text-[oklch(0.42_0.09_65)]" />
-            </span>
-            <div className="min-w-0 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <h2 className="bg-gradient-to-r from-[oklch(0.5_0.11_65)] via-[oklch(0.68_0.14_85)] to-[oklch(0.5_0.11_60)] bg-clip-text text-base font-bold text-transparent">
-                  {t('Dhun Premium')}
-                </h2>
-                <span className="rounded-full bg-amber-500/15 px-2 py-0.5 text-[10px] font-semibold text-amber-600 dark:text-amber-400">
-                  {t('Free forever')}
-                </span>
-              </div>
-              <p className="mt-1 text-xs text-muted-foreground">
-                {t('Unlock the gold theme, animated visuals & priority experience — free forever, no payment.')}
-              </p>
-            </div>
-          </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            {!s.premium ? (
-              <Button
-                onClick={() => s.setPremium(true)}
-                className="dhun-shimmer gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 font-semibold text-amber-950 shadow-md shadow-amber-500/25 hover:from-amber-300 hover:to-yellow-400"
-              >
-                <Crown className="h-4 w-4 fill-current" /> {t('Activate Premium')}
-              </Button>
-            ) : (
-              <>
-                <span className="dhun-shimmer inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-3 py-1.5 text-xs font-bold text-amber-950 shadow-md shadow-amber-500/25">
-                  <Crown className="h-4 w-4 fill-current" /> {t('Premium active')}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="rounded-full text-muted-foreground"
-                  onClick={() => s.setPremium(false)}
-                >
-                  {t('Deactivate')}
-                </Button>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
+      {/* Dhun Pro panel (Day 55) — tier status, usage stats, feature matrix */}
+      <ProPanel />
 
       {/* Themes (pro theme engine) — above the accent controls */}
       <section aria-label="Themes" className="mb-6 rounded-2xl border p-4 sm:p-5">
@@ -492,25 +628,33 @@ export function SettingsView() {
           <Palette className="h-4 w-4 text-primary" /> {t('Themes')}
         </h2>
         <p className="mb-4 text-xs text-muted-foreground">
-          {t('Curated dark-tuned looks — applied instantly. Your accent color stays on top.')}
+          {t('Curated dark-tuned looks — applied instantly. Your accent color stays on top. Midnight Rose and Mono Pro are free; the rest are part of the Pro theme engine.')}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           {APP_THEMES.map((th) => {
             const active = s.appTheme === th.id
+            const locked = th.pro && !s.premium
             return (
               <button
                 key={th.id}
-                onClick={() => s.setAppTheme(th.id)}
+                onClick={() =>
+                  locked ? openProSheet('theme-engine') : s.setAppTheme(th.id)
+                }
                 className={cn(
-                  'rounded-xl border p-2 text-left transition-colors',
+                  'relative rounded-xl border p-2 text-left transition-colors',
                   active
                     ? 'border-primary bg-accent/40 ring-2 ring-primary/50'
                     : 'hover:bg-accent/40'
                 )}
-                aria-label={`Theme ${th.name}${active ? ' (selected)' : ''}`}
+                aria-label={`Theme ${th.name}${active ? ' (selected)' : ''}${locked ? ' (Pro)' : ''}`}
                 aria-pressed={active}
-                title={th.description}
+                title={th.pro && !s.premium ? `${th.name} — Dhun Pro` : th.description}
               >
+                {th.pro && !s.premium && (
+                  <span className="absolute top-2.5 right-2.5 z-10">
+                    <ProBadge />
+                  </span>
+                )}
                 {/* Mini mockup painted from the theme's preview colors */}
                 <div
                   className="rounded-lg p-2.5"
@@ -577,8 +721,9 @@ export function SettingsView() {
                   <button
                     key={a.id}
                     onClick={() => {
-                      // Gold unlocks Dhun Premium (free) and switches to the gold theme.
-                      if (!s.premium) s.setPremium(true)
+                      // Gold unlocks Dhun Pro (free) and switches to the gold accent —
+                      // recorded honestly as an instant unlock (Day 53).
+                      if (!s.premium) s.activatePro('instant')
                       s.setAccent('gold')
                       applyAccent('gold')
                     }}
@@ -628,12 +773,13 @@ export function SettingsView() {
               )}
             </div>
           </div>
-          {/* Accent designer (Day 9): custom color picker + gradient presets */}
+          {/* Accent designer (Day 9): custom color picker + gradient presets. Day 52: Pro surface. */}
           <div className="space-y-3 rounded-xl border bg-accent/20 p-3">
             <div className="flex items-center justify-between gap-4">
               <div className="min-w-0">
-                <Label htmlFor="custom-accent" className="text-xs">
+                <Label htmlFor="custom-accent" className="text-xs flex items-center gap-1.5">
                   Custom accent
+                  {!s.premium && <ProBadge />}
                 </Label>
                 <p className="text-xs text-muted-foreground">
                   {t('Pick any color — shades adapt to light/dark automatically.')}
@@ -655,7 +801,13 @@ export function SettingsView() {
                     s.customAccent ? 'ring-foreground' : 'ring-transparent hover:ring-muted-foreground/40'
                   )}
                   style={s.customAccent ? { backgroundColor: s.customAccent } : undefined}
-                  title="Custom accent"
+                  title={s.premium ? 'Custom accent' : 'Custom accent — Dhun Pro'}
+                  onClick={(e) => {
+                    if (!s.premium) {
+                      e.preventDefault()
+                      openProSheet('accent-designer')
+                    }
+                  }}
                 >
                   {!s.customAccent && (
                     <span
@@ -687,7 +839,7 @@ export function SettingsView() {
                   return (
                     <button
                       key={g.id}
-                      onClick={() => s.setAccentGradient({ from: g.from, to: g.to })}
+                      onClick={proAction('accent-designer', () => s.setAccentGradient({ from: g.from, to: g.to }))}
                       className={cn(
                         'h-7 w-11 rounded-full ring-2 ring-offset-2 ring-offset-background transition-all',
                         on ? 'ring-foreground' : 'ring-transparent hover:ring-muted-foreground/40'
@@ -805,20 +957,40 @@ export function SettingsView() {
           </div>
           <div className="flex items-center justify-between gap-4">
             <div>
-              <Label htmlFor="visualizer-select">{t('Now Playing visualizer')}</Label>
+              <Label htmlFor="visualizer-select" className="flex items-center gap-1.5">
+                {t('Now Playing visualizer')}
+              </Label>
               <p className="text-xs text-muted-foreground">
-                {t('Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube embed player does not expose audio data, so it plays without a visualizer.')}
+                {t('Live audio-reactive art in Hi-Fi, Audius, Jamendo and offline playback. The YouTube embed player does not expose audio data, so it plays without a visualizer. Bars is free; Wave and Ring are Pro.')}
               </p>
             </div>
-            <Select value={s.visualizer} onValueChange={(v: VisualizerMode) => s.setVisualizer(v)}>
+            <Select
+              value={s.visualizer}
+              onValueChange={(v: VisualizerMode) => {
+                // Day 52 — Wave and Ring are Visualizer Pro; Bars and Off stay free.
+                if ((v === 'wave' || v === 'ring') && !s.premium) {
+                  openProSheet('visualizer-pro')
+                  return
+                }
+                s.setVisualizer(v)
+              }}
+            >
               <SelectTrigger id="visualizer-select" className="w-28">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="off">{t('Off')}</SelectItem>
                 <SelectItem value="bars">{t('Bars')}</SelectItem>
-                <SelectItem value="wave">{t('Wave')}</SelectItem>
-                <SelectItem value="ring">{t('Ring')}</SelectItem>
+                <SelectItem value="wave">
+                  <span className="inline-flex items-center gap-1.5">
+                    {t('Wave')} {!s.premium && <Crown className="h-3 w-3 fill-current text-amber-500" aria-hidden />}
+                  </span>
+                </SelectItem>
+                <SelectItem value="ring">
+                  <span className="inline-flex items-center gap-1.5">
+                    {t('Ring')} {!s.premium && <Crown className="h-3 w-3 fill-current text-amber-500" aria-hidden />}
+                  </span>
+                </SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -1240,15 +1412,69 @@ export function SettingsView() {
 
       <Separator className="my-6" />
 
-      <section aria-label="About" className="text-center text-xs text-muted-foreground">
-        <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-accent text-2xl">
-          🎵
+      {/* Day 56 — About redesigned as a premium landing card */}
+      <section
+        aria-label="About"
+        className="dhun-fade-up relative mb-6 overflow-hidden rounded-2xl border bg-gradient-to-b from-primary/10 via-transparent to-transparent p-5 text-center sm:p-6"
+      >
+        {/* Ambient crown watermark */}
+        <div
+          className="pointer-events-none absolute -right-6 -top-6 opacity-[0.07]"
+          aria-hidden
+        >
+          <ProCrown active={!reduceMotion} size={150} />
         </div>
-        <p className="font-semibold text-foreground">Dhun v1.1</p>
-        <p className="mt-1 max-w-sm mx-auto">
-          {t('A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog), LRCLIB (synced lyrics), iTunes (artwork) and YouTube\'s official embedded player. Cloud sync on Turso, offline downloads, Chromecast. No ads, no tracking.')}
-        </p>
-        <p className="mt-2">{t('Made with ♥ for listeners')}</p>
+        <div className="relative">
+          <span
+            className={cn(
+              'mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl text-2xl',
+              s.premium
+                ? 'dhun-shimmer bg-gradient-to-br from-[oklch(0.88_0.13_95)] to-[oklch(0.64_0.13_70)] shadow-md shadow-amber-500/25'
+                : 'bg-accent'
+            )}
+            aria-hidden
+          >
+            🎵
+          </span>
+          <p className="text-lg font-extrabold tracking-tight">
+            <span
+              className={cn(
+                s.premium &&
+                  'bg-gradient-to-r from-[oklch(0.68_0.14_85)] to-[oklch(0.82_0.15_90)] bg-clip-text text-transparent'
+              )}
+            >
+              Dhun
+            </span>
+            <span className="text-muted-foreground"> v1.1</span>
+            {s.premium && (
+              <span className="dhun-shimmer ml-2 inline-flex items-center gap-1 rounded-full bg-gradient-to-r from-amber-400 to-yellow-500 px-2 py-0.5 align-middle text-[10px] font-bold text-amber-950">
+                <Crown className="h-3 w-3 fill-current" aria-hidden /> Pro
+              </span>
+            )}
+          </p>
+          <p className="mx-auto mt-2 max-w-md text-xs leading-relaxed text-muted-foreground">
+            {t('A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog), LRCLIB (synced lyrics), iTunes (artwork) and YouTube\'s official embedded player. Cloud sync on Turso, offline downloads, Chromecast. No ads, no tracking.')}
+          </p>
+          {/* Feature strip — what the platform ships today */}
+          <div className="mx-auto mt-4 flex max-w-md flex-wrap justify-center gap-1.5" aria-label={t('Everything included')}>
+            {[
+              'Search', 'Charts', 'Playlists', 'Lyrics', 'Offline', 'Cloud sync',
+              'Sleep timer', 'Karaoke', 'Cast', 'AI DJ', 'EQ', 'Visualizer',
+            ].map((f) => (
+              <span
+                key={f}
+                className="rounded-full border bg-muted/40 px-2 py-0.5 text-[10px] text-muted-foreground"
+              >
+                {f}
+              </span>
+            ))}
+          </div>
+          <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
+            {t('Free forever — no ads, no tracking, no payment')}
+          </p>
+          <p className="mt-2 text-[11px] text-muted-foreground">{t('Made with ♥ for listeners')}</p>
+        </div>
       </section>
     </div>
   )

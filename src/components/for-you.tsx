@@ -12,6 +12,7 @@ import { useT } from '@/lib/i18n'
 import { TrackImage } from '@/components/track-row'
 import { Button } from '@/components/ui/button'
 import { usePlayer } from '@/store/player'
+import { useProAction, ProBadge } from '@/components/premium/pro-badge'
 import type { HomeSection, MusicItem } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
@@ -26,6 +27,8 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
   const [mix, setMix] = useState<DailyMixData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const playItem = usePlayer((s) => s.playItem)
+  // Day 52 — AI DJ is a Pro surface: free users see the mix but unlock to play.
+  const proAction = useProAction()
 
   useEffect(() => {
     let alive = true
@@ -90,6 +93,7 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-primary">
               <Sparkles className="h-3 w-3" /> AI DJ · {dayLabel}
+              <ProBadge />
             </p>
             <h2 className="dhun-gradient-text truncate text-xl sm:text-2xl font-extrabold tracking-tight">
               {mix.title}
@@ -101,7 +105,7 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
               <Button
                 size="sm"
                 className="rounded-full gap-1.5"
-                onClick={() => playItem(mix.items[0], mix.items)}
+                onClick={proAction('ai-dj', () => playItem(mix.items[0], mix.items))}
                 aria-label={t('Play daily mix')}
               >
                 <Play className="h-4 w-4 fill-current" /> {t('Play mix')}
@@ -110,11 +114,11 @@ function DailyMixHero({ refreshKey }: { refreshKey: number }) {
                 size="sm"
                 variant="outline"
                 className="rounded-full gap-1.5"
-                onClick={() => {
+                onClick={proAction('ai-dj', () => {
                   // Shuffle mode ON before playing → the queue is shuffled.
                   usePlayer.setState({ shuffle: true })
                   playItem(mix.items[0], mix.items)
-                }}
+                })}
                 aria-label={t('Shuffle play daily mix')}
               >
                 <Shuffle className="h-4 w-4" /> {t('Shuffle')}

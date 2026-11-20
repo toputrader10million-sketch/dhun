@@ -59,6 +59,7 @@ Dhun is a free PWA music platform (no login, no ads). Features the user may ask 
 - Desktop widget: Settings → Playback — floating compact player with mini spectrum (desktop).
 - Handoff: Settings → "Continue on another device"; a resume toast appears automatically when another device sends you a queue.
 - Region: Settings → Music region affects charts/home feed and voice language.
+- Dhun Pro: a free comfort tier (no payment exists). Pro adds the theme engine beyond Midnight Rose/Mono Pro (incl. Imperial Gold), AI DJ Daily Mix playback, AI playlist builder, per-source EQ profiles, Wave/Ring visualizers and public share-links. Anyone can unlock it instantly free, or earn it: 25 plays across 3+ days mints a personal loyalty code, or sending feedback unlocks it as a thank-you. The Pro panel lives at the top of Settings with a usage dashboard. Core playback/search/playlists/lyrics/downloads stay free forever.
 Answer with practical steps, be brief, and never invent features that are not listed.`
 
 /* ---------- LLM planner ---------- */

@@ -31,9 +31,12 @@ import { handleProtocolLink } from '@/lib/pwa-links'
 import { useUi, type ViewId } from '@/store/ui'
 import { usePlayer } from '@/store/player'
 import { useSettings, applyAccent, eqGainsFor } from '@/store/settings'
+import { ProSheet, useProSheet } from '@/components/premium/pro-sheet'
+import { ProCrown, ProBadge } from '@/components/premium/pro-badge'
 import { useOffline } from '@/store/offline'
 import { useSmartDownloads } from '@/lib/smart-downloads'
 import { autoEvictIfNeeded } from '@/lib/storage-manager'
+import { trackSession } from '@/lib/usage-stats'
 import { hifiEngine } from '@/engine/hifi'
 import { useCast } from '@/lib/cast'
 import { useT } from '@/lib/i18n'
@@ -109,6 +112,8 @@ export function AppShell() {
   const reduceMotion = !!useReducedMotion()
   const [scrolled, setScrolled] = useState(false)
   const language = useSettings((s) => s.language)
+  // Day 54 — Pro chrome signature (gold brand + crown chip)
+  const pro = useSettings((s) => s.premium)
 
   // Global keyboard shortcuts (playback, navigation, help dialog)
   useKeyboardShortcuts()
@@ -124,6 +129,8 @@ export function AppShell() {
     useCast.getState().actions.init()
     // Day 48 — storage pressure valve (no-op unless the user opted in)
     void autoEvictIfNeeded()
+    // Day 55 — record today as an active session (usage dashboard + loyalty)
+    trackSession()
     // Smart downloads: sweep favorites shortly after boot (throttled internally).
     const bootTimer = setTimeout(() => void useSmartDownloads.getState().sweep('boot'), 6000)
     const onOnline = () => void useSmartDownloads.getState().sweep('online')
@@ -238,12 +245,28 @@ export function AppShell() {
             onClick={() => setView('home')}
             aria-label="Dhun home"
           >
-            <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-primary-foreground">
+            <span
+              className={cn(
+                'flex h-9 w-9 items-center justify-center rounded-xl text-primary-foreground',
+                pro
+                  ? 'dhun-shimmer bg-gradient-to-br from-[oklch(0.88_0.13_95)] to-[oklch(0.64_0.13_70)] shadow-md shadow-amber-500/25'
+                  : 'bg-primary'
+              )}
+            >
               <AudioWaveform className="h-5 w-5" aria-hidden="true" />
             </span>
             <span>
-              <span className="block text-lg font-extrabold leading-none tracking-tight">Dhun</span>
-              <span className="block text-[10px] text-muted-foreground">{t('free music platform')}</span>
+              <span
+                className={cn(
+                  'block text-lg font-extrabold leading-none tracking-tight',
+                  pro && 'bg-gradient-to-r from-[oklch(0.68_0.14_85)] to-[oklch(0.82_0.15_90)] bg-clip-text text-transparent'
+                )}
+              >
+                Dhun
+              </span>
+              <span className="block text-[10px] text-muted-foreground">
+                {pro ? t('Dhun Pro') : t('free music platform')}
+              </span>
             </span>
           </button>
           <nav className="flex flex-col gap-1" aria-label={t('Main navigation')}>
@@ -280,6 +303,21 @@ export function AppShell() {
             })}
           </nav>
           <ShortcutsButton />
+          {/* Day 54 — Pro chip: shimmering crown for members, quiet unlock door otherwise */}
+          <button
+            onClick={() => useProSheet.getState().openSheet()}
+            className={cn(
+              'mt-4 flex items-center gap-3 rounded-xl border px-3 py-2.5 text-sm font-medium transition-[background-color,transform] active:scale-[0.98]',
+              pro
+                ? 'border-amber-500/40 bg-gradient-to-r from-amber-500/10 to-yellow-500/5 text-foreground'
+                : 'border-dashed text-muted-foreground hover:bg-accent/60 hover:text-foreground'
+            )}
+            aria-label={pro ? 'Dhun Pro active' : 'Dhun Pro — unlock'}
+          >
+            <ProCrown active={pro} size={16} muted={!pro} />
+            <span className="flex-1 text-left">{pro ? t('Pro is active') : t('Unlock Dhun Pro')}</span>
+            {!pro && <ProBadge />}
+          </button>
           <button
             onClick={() => goSearch()}
             className="mt-4 flex items-center gap-3 rounded-xl border border-dashed px-3 py-2.5 text-sm text-muted-foreground transition-[background-color,color,transform] hover:bg-accent/60 hover:text-foreground active:scale-[0.98]"
@@ -312,13 +350,27 @@ export function AppShell() {
               </span>
               <span className="text-lg font-extrabold tracking-tight">Dhun</span>
             </button>
-            <button
-              onClick={() => goSearch()}
-              className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground transition-[background-color,transform] active:scale-[0.95]"
-              aria-label="Search"
-            >
-              <Compass className="h-4 w-4" aria-hidden="true" /> {t('Search')}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => useProSheet.getState().openSheet()}
+                className={cn(
+                  'flex h-8 w-8 items-center justify-center rounded-full transition-transform active:scale-95',
+                  pro
+                    ? 'dhun-shimmer bg-gradient-to-br from-amber-400 to-yellow-500 shadow-sm shadow-amber-500/30'
+                    : 'bg-accent text-amber-600 dark:text-amber-400'
+                )}
+                aria-label={pro ? 'Dhun Pro active' : 'Dhun Pro — unlock'}
+              >
+                <ProCrown active={pro} size={14} muted={!pro} />
+              </button>
+              <button
+                onClick={() => goSearch()}
+                className="flex items-center gap-2 rounded-full bg-accent px-3 py-1.5 text-sm text-muted-foreground transition-[background-color,transform] active:scale-[0.95]"
+                aria-label="Search"
+              >
+                <Compass className="h-4 w-4" aria-hidden="true" /> {t('Search')}
+              </button>
+            </div>
           </header>
 
           <main className="flex-1 pb-44 lg:pb-28" id="main-content">
@@ -369,6 +421,9 @@ export function AppShell() {
 
         {/* Day 46 — custom install sheet (beforeinstallprompt / iOS guidance) */}
         <InstallSheet />
+
+        {/* Day 52 — Pro upsell sheet (opened by any gated control app-wide) */}
+        <ProSheet />
 
         {/* Mobile/tablet bottom nav — sliding accent rail + springy active icon */}
         <nav
