@@ -225,3 +225,9 @@
   - **Bug 2 — stale heart UI**: now-playing + mini-player `useLibrary((s) => s.isFavorite)` stable function selector subscribe করছিল — favorites বদলালেও re-render হতো না (paused অবস্থায় heart আটকে থাকত)। দুটোই এখন সরাসরি `favorites` array subscribe করে — paused অবস্থায়ও heart instant sync (browser-verified add/remove round trip, desktop + mobile)।
   - **Bug 3 — production-only**: `/api/sync/queue` Turso-তে **500** — `QueueHandoff` টেবিল (D32) D34 lazy-bootstrap list-এ ছিল না, আর token ছাড়া `prisma db push` Turso-তে চলে না। টেবিল এখন idempotent lazy DDL-এ যোগ; GET/POST প্রথম request-এ self-heal (bootstrap চলাকালে honest 503)।
   - lint শূন্য + tsc শূন্য (src/), dev.log শূন্য।
+
+- **Days 59–60** ✅ (এক সেশনে ২ দিন — Phase H সমাপ্ত, PLAN-60 সম্পূর্ণ):
+  - **Day 59 — Docs**: README.md সম্পূর্ণ ৬০-দিন state-এ পুনর্লিখন (honest pitch, এরিয়া-ভিত্তিক feature map, Dhun Pro সেকশন, updated architecture snapshot, Q2 লিংক); নতুন COMMUNITY.md (contributing quality gates, house rules — কোর ফিচার কখনো gated হবে না, privacy টেবিল, unlock-code policy, issue triage); PLAN-60 Day 58 এন্ট্রি।
+  - **Day 60 — Launch review**: LAUNCH-REVIEW.md — ৬ ফেজের সামারি, metric (৪৩ API routes, ~২৬.৭k LOC TS, ৭৪ components, ৪৯৪ বাংলা keys, ৬ free upstream API, payment/tracker/ad = ০), সম্পূর্ণ defect log (D58-এর ৩টা আসল বাগ সহ), final quality-gate status, সৎ known-limits, lessons learned; PLAN-Q2.md — পরের কোয়ার্টারের ৪-ফেজ রোডম্যাপ (schema-driven bootstrap, real-device loop, anonymous social depth, contributor experience) + explicit non-goals; About কার্ডে launch badge "৬০-দিনের যাত্রা সম্পূর্ণ — ৬০/৬০ দিন" (EN+BN, browser + production verified)।
+  - **Final production verify**: / → 200, /api/sync/queue → 200 (self-healed), launch badge live, dev.log শূন্য।
+  - **৬০/৬০ দিন শিপড — PLAN-60 সম্পূর্ণ।** পরের কোয়ার্টার: PLAN-Q2.md।
