@@ -13,6 +13,23 @@ import { db } from '@/lib/db'
 let bootstrapPromise: Promise<boolean> | null = null
 
 const DDL: string[] = [
+  // Day 32 — cross-device queue handoff snapshots. D58: added to the lazy
+  // bootstrap — Turso databases seeded from the early schema.sql lack this
+  // table (Prisma db push can't run against Turso without the token), which
+  // made /api/sync/queue 500 in production. Mirrors schema.prisma exactly.
+  `CREATE TABLE IF NOT EXISTS "QueueHandoff" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "userId" TEXT NOT NULL,
+    "fromDevice" TEXT NOT NULL DEFAULT 'Unknown device',
+    "trackIndex" INTEGER NOT NULL DEFAULT 0,
+    "position" INTEGER NOT NULL DEFAULT 0,
+    "shuffle" BOOLEAN NOT NULL DEFAULT false,
+    "repeat" TEXT NOT NULL DEFAULT 'off',
+    "items" TEXT NOT NULL,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+  )`,
+  `CREATE INDEX IF NOT EXISTS "QueueHandoff_userId_createdAt_idx" ON "QueueHandoff"("userId", "createdAt")`,
   // Day 34 — public read-only playlist share links
   `CREATE TABLE IF NOT EXISTS "PlaylistShare" (
     "id" TEXT NOT NULL PRIMARY KEY,

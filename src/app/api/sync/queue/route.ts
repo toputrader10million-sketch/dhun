@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
+import { ensureNewTables } from '@/lib/db-bootstrap'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,6 +22,9 @@ interface HandoffItem {
 // Body: { fromDevice, index, position, shuffle, repeat, items }
 export async function POST(req: NextRequest) {
   try {
+    if (!(await ensureNewTables())) {
+      return NextResponse.json({ error: 'Storage warming up — retry shortly' }, { status: 503 })
+    }
     const user = await getOrCreateUser()
     const body = (await req.json()) as {
       fromDevice?: string
@@ -74,6 +78,12 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   try {
     const user = await getOrCreateUser()
+    // D58 — QueueHandoff was never added to the lazy bootstrap (the D34/37
+    // DDL list predates it), so a Turso database seeded from the early
+    // schema.sql 500s here. Self-heal on first request.
+    if (!(await ensureNewTables())) {
+      return NextResponse.json({ error: 'Storage warming up — retry shortly' }, { status: 503 })
+    }
     const rows = await db.queueHandoff.findMany({
       where: { userId: user.id },
       orderBy: { createdAt: 'desc' },
