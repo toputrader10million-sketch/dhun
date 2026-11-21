@@ -279,6 +279,8 @@ export const BN: Record<string, string> = {
   'A free, open music platform built on public APIs: Piped (metadata), Audius (indie catalog), LRCLIB (synced lyrics), iTunes (artwork) and YouTube\'s official embedded player. Cloud sync on Turso, offline downloads, Chromecast. No ads, no tracking.':
     'পাবলিক API-এর ওপর গড়া ফ্রি, খোলা মিউজিক প্ল্যাটফর্ম: Piped (মেটাডেটা), Audius (ইন্ডি ক্যাটালগ), LRCLIB (সিঙ্কড লিরিক্স), iTunes (আর্টওয়ার্ক) ও YouTube-এর অফিসিয়াল এমবেড প্লেয়ার। Turso-তে ক্লাউড সিঙ্ক, অফলাইন ডাউনলোড, Chromecast। বিজ্ঞাপন নেই, ট্র্যাকিং নেই।',
   'Made with ♥ for listeners': 'শ্রোতাদের জন্য ♥ দিয়ে বানানো',
+  '60-day arc shipped — 60/60 days, every golden path browser-verified':
+    '৬০-দিনের যাত্রা সম্পূর্ণ — ৬০/৬০ দিন, প্রতিটা golden path browser-এ যাচাইকৃত',
   'Could not clear cache': 'ক্যাশ মুছতে ব্যর্থ',
   'Offline cache cleared': 'অফলাইন ক্যাশ মুছে ফেলা হয়েছে',
   'Could not test instances': 'Instance পরীক্ষা ব্যর্থ',

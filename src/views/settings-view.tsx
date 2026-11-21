@@ -28,6 +28,7 @@ import {
   Link2,
   HardDrive,
   Heart,
+  Rocket,
   Save,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -1472,6 +1473,11 @@ export function SettingsView() {
           <p className="mt-4 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/10 px-3 py-1 text-[11px] font-medium text-emerald-600 dark:text-emerald-400">
             <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
             {t('Free forever — no ads, no tracking, no payment')}
+          </p>
+          {/* Day 60 — launch review badge: the 60-day arc shipped in full */}
+          <p className="mt-3 inline-flex items-center gap-1.5 rounded-full border border-primary/30 bg-primary/5 px-3 py-1 text-[11px] font-semibold text-primary">
+            <Rocket className="h-3.5 w-3.5" aria-hidden />
+            {t('60-day arc shipped — 60/60 days, every golden path browser-verified')}
           </p>
           <p className="mt-2 text-[11px] text-muted-foreground">{t('Made with ♥ for listeners')}</p>
         </div>
