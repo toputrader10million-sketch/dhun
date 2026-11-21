@@ -73,7 +73,10 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// DELETE ?trackId=&source= → remove favorite(s) of the current user
+// DELETE ?trackId=&source= → remove favorite(s) of the current user.
+// D58 fix — when the caller omits `source`, delete across ALL sources
+// (the old 'yt' default made Audius favorites impossible to remove: the
+// deleteMany matched 0 rows and still returned ok → ghost favorites).
 export async function DELETE(req: NextRequest) {
   try {
     const user = await getOrCreateUser()
@@ -81,9 +84,11 @@ export async function DELETE(req: NextRequest) {
     if (!trackId) {
       return NextResponse.json({ error: 'Missing "trackId" parameter' }, { status: 400 })
     }
-    const source = req.nextUrl.searchParams.get('source') ?? 'yt'
-    await db.favorite.deleteMany({ where: { userId: user.id, source, trackId } })
-    return NextResponse.json({ ok: true })
+    const source = req.nextUrl.searchParams.get('source')
+    const removed = await db.favorite.deleteMany({
+      where: { userId: user.id, trackId, ...(source ? { source } : {}) },
+    })
+    return NextResponse.json({ ok: true, removed: removed.count })
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : 'Failed to delete favorite' },

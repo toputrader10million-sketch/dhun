@@ -66,7 +66,9 @@ export function MiniPlayer() {
   const seek = usePlayer((s) => s.seek)
   const openNowPlaying = useUi((s) => s.openNowPlaying)
   const toggleFavorite = useLibrary((s) => s.toggleFavorite)
-  const isFavorite = useLibrary((s) => s.isFavorite)
+  // D58 fix — subscribe to the favorites ARRAY (a stable function selector
+  // never triggers re-renders, so the heart went stale while paused).
+  const favorites = useLibrary((s) => s.favorites)
   const showMiniArt = useSettings((s) => s.showMiniArt)
   const castAvailable = useCast((s) => s.available)
   const castConnected = useCast((s) => s.connected)
@@ -84,7 +86,7 @@ export function MiniPlayer() {
   const reduceMotion = !!useReducedMotion()
 
   const progress = current && duration > 0 ? (position / duration) * 100 : 0
-  const fav = current ? isFavorite(current.id) : false
+  const fav = current ? favorites.some((f) => f.trackId === current.id) : false
 
   return (
     <AnimatePresence>

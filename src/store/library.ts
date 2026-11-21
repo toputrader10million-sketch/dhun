@@ -85,7 +85,12 @@ export const useLibrary = create<LibraryState>((set, get) => ({
     const fav = get().isFavorite(item.id)
     if (fav) {
       set((s) => ({ favorites: s.favorites.filter((f) => f.trackId !== item.id) }))
-      await fetch(`/api/favorites?trackId=${item.id}`, { method: 'DELETE' }).catch(() => {})
+      // D58 fix — pass the item's real source. The API used to default to
+      // 'yt' when omitted, so removing an Audius favorite silently deleted
+      // nothing (deleteMany matched 0 rows) and the favorite resurrected on
+      // the next library load ("ghost favorite").
+      const src = item.source === 'au' ? 'au' : item.source === 'jm' ? 'jm' : 'yt'
+      await fetch(`/api/favorites?trackId=${item.id}&source=${src}`, { method: 'DELETE' }).catch(() => {})
       toast('Removed from Favorites', { description: item.title.slice(0, 48) })
     } else {
       const optimistic: LibraryTrack = {

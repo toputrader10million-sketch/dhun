@@ -383,7 +383,9 @@ export function NowPlaying() {
   const queue = usePlayer((s) => s.queue)
   const index = usePlayer((s) => s.index)
   const toggleFavorite = useLibrary((s) => s.toggleFavorite)
-  const isFavorite = useLibrary((s) => s.isFavorite)
+  // D58 fix — subscribe to the favorites ARRAY (a stable function selector
+  // never triggers re-renders, so the heart went stale while paused).
+  const favorites = useLibrary((s) => s.favorites)
   const region = useSettings((s) => s.region)
   const castAvailable = useCast((s) => s.available)
   const castConnected = useCast((s) => s.connected)
@@ -430,7 +432,7 @@ export function NowPlaying() {
     artCandidates.push(`https://i.ytimg.com/vi/${current.id}/mqdefault.jpg`)
   }
   const artSrc = artStage < artCandidates.length ? artCandidates[artStage] : null
-  const fav = isFavorite(current.id)
+  const fav = favorites.some((f) => f.trackId === current.id)
   const upNext = queue.slice(index + 1)
 
   return (
