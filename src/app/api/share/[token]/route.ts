@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { ensureNewTables } from '@/lib/db-bootstrap'
 
@@ -12,14 +13,15 @@ const MAX_ITEMS = 200
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params
   if (!token || token.length > 64) {
-    return NextResponse.json({ error: 'Invalid link' }, { status: 400 })
+    return apiError('Invalid link', { status: 400 })
   }
   try {
     if (!(await ensureNewTables())) {
-      return NextResponse.json(
-        { error: 'Shared playlists are not available right now — try again later' },
-        { status: 503 }
-      )
+      return apiError('Shared playlists are not available right now — try again later', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+      })
     }
     const share = await db.playlistShare.findUnique({
       where: { token },
@@ -33,7 +35,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       },
     })
     if (!share) {
-      return NextResponse.json({ error: 'This link is invalid or was revoked' }, { status: 404 })
+      return apiError('This link is invalid or was revoked', { status: 404 })
     }
 
     // Fire-and-forget view counter (never blocks or fails the read)
@@ -59,9 +61,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       })),
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load shared playlist' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to load shared playlist', {
+      status: 500,
+    })
   }
 }

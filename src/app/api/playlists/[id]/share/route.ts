@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { randomBytes } from 'crypto'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { ensureNewTables } from '@/lib/db-bootstrap'
@@ -14,15 +15,16 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params
   try {
     if (!(await ensureNewTables())) {
-      return NextResponse.json(
-        { error: 'Public links are not available right now — try again later' },
-        { status: 503 }
-      )
+      return apiError('Public links are not available right now — try again later', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+      })
     }
     const user = await getOrCreateUser()
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
 
     const existing = await db.playlistShare.findFirst({
@@ -39,10 +41,9 @@ export async function POST(_req: NextRequest, { params }: { params: Promise<{ id
     })
     return NextResponse.json({ token: share.token, views: share.views, created: true })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to create share link' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to create share link', {
+      status: 500,
+    })
   }
 }
 
@@ -51,22 +52,22 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
   const { id } = await params
   try {
     if (!(await ensureNewTables())) {
-      return NextResponse.json(
-        { error: 'Public links are not available right now — try again later' },
-        { status: 503 }
-      )
+      return apiError('Public links are not available right now — try again later', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+      })
     }
     const user = await getOrCreateUser()
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
     const removed = await db.playlistShare.deleteMany({ where: { playlistId: playlist.id } })
     return NextResponse.json({ ok: true, removed: removed.count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to revoke share link' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to revoke share link', {
+      status: 500,
+    })
   }
 }

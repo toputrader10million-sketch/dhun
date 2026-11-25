@@ -170,8 +170,22 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 
   removeFromPlaylist: async (playlistId, itemId) => {
-    await fetch(`/api/playlists/${playlistId}/items?itemId=${itemId}`, { method: 'DELETE' }).catch(() => {})
-    toast('Removed from playlist')
+    // Q1.2 — the API now 404s when nothing was removed and reports the exact
+    // count; the toast tells the truth instead of assuming success.
+    try {
+      const res = await fetch(`/api/playlists/${playlistId}/items?itemId=${itemId}`, {
+        method: 'DELETE',
+      })
+      const d = (await res.json().catch(() => null)) as { removed?: number } | null
+      if (!res.ok) {
+        toast.error('Nothing was removed — it was already gone')
+      } else {
+        const n = d?.removed ?? 1
+        toast(n > 1 ? `Removed ${n} songs` : 'Removed from playlist')
+      }
+    } catch {
+      toast.error('Could not reach Dhun servers — removal not confirmed')
+    }
   },
 
   getPlaylistDetail: async (id) => {
@@ -185,8 +199,16 @@ export const useLibrary = create<LibraryState>((set, get) => ({
   },
 
   clearHistory: async () => {
-    await fetch('/api/history', { method: 'DELETE' }).catch(() => {})
+    // Q1.2 — surface how many entries actually left the table
+    let removed = 0
+    try {
+      const res = await fetch('/api/history', { method: 'DELETE' })
+      const d = (await res.json().catch(() => null)) as { removed?: number } | null
+      removed = d?.removed ?? 0
+    } catch {
+      /* still clear the local view */
+    }
     set({ history: [] })
-    toast('History cleared')
+    toast(removed > 0 ? `History cleared — ${removed} entries` : 'History cleared')
   },
 }))

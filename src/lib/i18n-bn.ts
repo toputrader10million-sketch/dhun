@@ -612,4 +612,22 @@ export const BN: Record<string, string> = {
     'Hi-Fi, Audius, Jamendo ও অফলাইন প্লেব্যাকে লাইভ অডিও-রিঅ্যাক্টিভ আর্ট। YouTube embed প্লেয়ার অডিও ডেটা দেয় না, তাই সেখানে ভিজ্যুয়ালাইজার ছাড়া চলে। Bars ফ্রি; Wave ও Ring Pro।',
   'Everything included': 'সব অন্তর্ভুক্ত',
   'Free forever — no ads, no tracking, no payment': 'চিরকাল ফ্রি — কোনো বিজ্ঞাপন, ট্র্যাকিং বা পেমেন্ট নেই',
+  // Q1.3 — degraded-upstream banner
+  'Upstream slow — showing cached data': 'আপস্ট্রিম ধীর — ক্যাশ করা ডেটা দেখানো হচ্ছে',
+  'Tap to dismiss': 'বন্ধ করতে ট্যাপ করুন',
+  // Q1.4 — system health card
+  'System health': 'সিস্টেম হেলথ',
+  'Database': 'ডেটাবেস',
+  'Database unavailable': 'ডেটাবেস অনুপলব্ধ',
+  'cached entries': 'ক্যাশ এন্ট্রি',
+  'Cache hit-rate': 'ক্যাশ হিট-রেট',
+  'Circuit breakers': 'সার্কিট ব্রেকার',
+  'All upstreams healthy': 'সব আপস্ট্রিম সুস্থ',
+  '{0} open': '{0} খোলা',
+  'Healthy': 'সুস্থ',
+  'Open': 'খোলা',
+  'Half-open': 'অর্ধ-খোলা',
+  'Health beacon': 'হেলথ বিকন',
+  'One honest place for self-hosters: /api/health reports database, cache, breaker and upstream state.':
+    'সেলফ-হোস্টারদের জন্য এক সৎ জায়গা: /api/health ডেটাবেস, ক্যাশ, ব্রেকার ও আপস্ট্রিম অবস্থা জানায়।',
 }

@@ -1,6 +1,7 @@
 // Audius discovery layer — server-only. Mirrors piped.ts patterns
 // (in-memory cache via cacheGet/cacheSet, timeouts, graceful errors).
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 import type { MusicItem } from '@/lib/types'
 
 export const AUDIUS_APP_NAME = 'Dhun'
@@ -77,18 +78,22 @@ async function fetchTracks(path: string, cacheKey: string): Promise<MusicItem[]>
   const cached = cacheGet<MusicItem[]>(cacheKey)
   if (cached) return cached
 
+  // Q1.3 — discovery-node fetches sit behind the "audius" breaker so the
+  // Charts/Home fail fast and serve stale cache while Audius is down.
   const host = await discoverHost()
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch(`${host}${path}`, {
-      signal: controller.signal,
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
+    const res = await withBreaker('audius', async () => {
+      const r = await fetch(`${host}${path}`, {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+      })
+      if (!r.ok) throw new Error(`Audius HTTP ${r.status} for ${path}`)
+      return (await r.json()) as { data?: Record<string, unknown>[] }
     })
-    if (!res.ok) throw new Error(`Audius HTTP ${res.status} for ${path}`)
-    const data = (await res.json()) as { data?: Record<string, unknown>[] }
-    const items = (Array.isArray(data.data) ? data.data : [])
+    const items = (Array.isArray(res.data) ? res.data : [])
       .map(mapTrack)
       .filter((it): it is MusicItem => it !== null)
     cacheSet(cacheKey, items, TRACK_TTL_MS)
@@ -121,7 +126,10 @@ export async function resolveAudiusStreamUrl(trackId: string): Promise<string> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch(url, { redirect: 'manual', cache: 'no-store' })
+    const res = await withBreaker('audius', async () => {
+      const r = await fetch(url, { redirect: 'manual', cache: 'no-store' })
+      return r
+    })
     const location = res.headers.get('location')
     if (location) return location
     // some discovery nodes stream the audio directly — hand the URL over as-is

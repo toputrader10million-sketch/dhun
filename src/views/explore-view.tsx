@@ -19,6 +19,7 @@ import { usePlayer } from '@/store/player'
 import { useUi } from '@/store/ui'
 import { useT } from '@/lib/i18n'
 import { useKeys } from '@/store/keys'
+import { reportDegraded } from '@/store/degraded'
 import { useSettings } from '@/store/settings'
 import { useVoiceSearch, VOICE_LOCALE_BY_REGION, VOICE_ERROR_MESSAGES, type VoiceError } from '@/hooks/use-voice-search'
 import { DiscoveryFeed } from '@/components/discovery-feed'
@@ -123,6 +124,7 @@ export function ExploreView() {
       fetch(url)
         .then((r) => (r.ok ? r.json() : r.json().catch(() => null).then((d) => Promise.reject(Object.assign(new Error(String(r.status)), { payload: d })))))
         .then((d: SearchResponse) => {
+          reportDegraded(d)
           const items = (d.items || []).map((it: MusicItem) => ({
             ...it,
             source: src === 'au' ? ('au' as const) : src === 'jm' ? ('jm' as const) : it.source,

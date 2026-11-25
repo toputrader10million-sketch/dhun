@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cleanTitle, cacheGet, cacheSet } from '@/lib/piped'
 import type { ArtworkResponse } from '@/lib/types'
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest) {
   const artist = (req.nextUrl.searchParams.get('artist') ?? '').trim()
 
   if (!title) {
-    return NextResponse.json({ error: 'Missing "title" parameter' }, { status: 400 })
+    return apiError('Missing "title" parameter', { status: 400 })
   }
 
   const cacheKey = `artwork:${title.toLowerCase()}|${artist.toLowerCase()}`

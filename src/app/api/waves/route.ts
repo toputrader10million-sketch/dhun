@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { ytMusicSearch, ytWebSearch } from '@/lib/ytmusic'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { emptyResultFallback } from '@/lib/resilient'
 import { WAVES, WAVE_QUERIES, type WaveTrackResponse } from '@/lib/waves'
 import type { MusicItem } from '@/lib/types'
 
@@ -40,7 +42,7 @@ export async function GET(req: NextRequest) {
   const meta = WAVES.find((w) => w.id === id)
   const queries = WAVE_QUERIES[id]
   if (!meta || !queries) {
-    return NextResponse.json({ error: 'Unknown wave' }, { status: 400 })
+    return apiError('Unknown wave', { status: 400 })
   }
 
   const cacheKey = `wave:${id}`
@@ -64,6 +66,14 @@ export async function GET(req: NextRequest) {
 
   const wave: WaveTrackResponse = { ...meta, items }
   const out = { wave }
-  cacheSet(cacheKey, out, TTL)
-  return NextResponse.json(out)
+  // Q1.3 — empty wave + open breaker → stale cache with honest banner.
+  const fallback = emptyResultFallback({
+    cacheKey,
+    out,
+    isEmpty: (v) => v.wave.items.length === 0,
+    candidates: ['ytmusic', 'piped'],
+  })
+  if (fallback.cacheable) cacheSet(cacheKey, fallback.data, TTL)
+  const body = fallback.degraded ? { ...fallback.data, degraded: fallback.degraded } : fallback.data
+  return NextResponse.json(body)
 }

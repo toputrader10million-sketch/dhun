@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { fetchPiped, parseStreamItem, cacheGet, cacheSet } from '@/lib/piped'
 import type { MusicItem } from '@/lib/types'
 
@@ -9,7 +10,7 @@ const TTL = 15 * 60 * 1000
 // Next 16: params is a Promise
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!id) return NextResponse.json({ error: 'Missing playlist id' }, { status: 400 })
+  if (!id) return apiError('Missing playlist id', { status: 400 })
 
   const cacheKey = `playlist:${id}`
   const cached = cacheGet<{
@@ -43,6 +44,6 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     return NextResponse.json(out)
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Playlist fetch failed'
-    return NextResponse.json({ error: message }, { status: 503 })
+    return apiError(message, { status: 503, code: 'upstream-unavailable', retryable: true })
   }
 }

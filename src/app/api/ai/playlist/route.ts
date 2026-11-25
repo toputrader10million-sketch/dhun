@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { ytMusicSearch } from '@/lib/ytmusic'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -21,22 +23,26 @@ async function composeWithLLM(prompt: string): Promise<PlaylistSpec | null> {
   try {
     const { default: ZAI } = await import('z-ai-web-dev-sdk')
     const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content:
-            'You are the playlist composer for Dhun music app. Given a user prompt in ANY language ' +
-            '(Bangla, English, Hindi, vibe words, activities…), compose a cohesive playlist. ' +
-            'Return ONLY valid JSON (no markdown): {"name": "<short playlist name in the user\'s language>", ' +
-            '"description": "<one line>", "tracks": [{"title": "<real song title>", "artist": "<real artist>"}]}. ' +
-            'Exactly 25 tracks. Use REAL, well-known songs that exist on YouTube Music. Match the prompt\'s ' +
-            'language, mood and era. No repeats.',
-        },
-        { role: 'user', content: prompt },
-      ],
-      thinking: { type: 'disabled' },
-    })
+    const completion = await withBreaker(
+      'llm',
+      () =>
+        zai.chat.completions.create({
+          messages: [
+            {
+              role: 'assistant',
+              content:
+                'You are the playlist composer for Dhun music app. Given a user prompt in ANY language ' +
+                '(Bangla, English, Hindi, vibe words, activities…), compose a cohesive playlist. ' +
+                'Return ONLY valid JSON (no markdown): {"name": "<short playlist name in the user\'s language>", ' +
+                '"description": "<one line>", "tracks": [{"title": "<real song title>", "artist": "<real artist>"}]}. ' +
+                'Exactly 25 tracks. Use REAL, well-known songs that exist on YouTube Music. Match the prompt\'s ' +
+                'language, mood and era. No repeats.',
+            },
+            { role: 'user', content: prompt },
+          ],
+          thinking: { type: 'disabled' },
+        })
+    )
     const text = completion.choices[0]?.message?.content?.trim()
     if (!text) return null
     const jsonText = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
@@ -86,7 +92,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { prompt?: string }
     const prompt = (body.prompt ?? '').trim()
     if (!prompt) {
-      return NextResponse.json({ error: 'Missing "prompt"' }, { status: 400 })
+      return apiError('Missing "prompt"', { status: 400 })
     }
 
     const cacheKey = `ai-playlist:${prompt.toLowerCase()}`
@@ -95,15 +101,14 @@ export async function POST(req: NextRequest) {
 
     const spec = (await composeWithLLM(prompt)) ?? (await composeFromSearch(prompt))
     if (!spec) {
-      return NextResponse.json({ error: 'Could not compose a playlist for this prompt' }, { status: 502 })
+      return apiError('Could not compose a playlist for this prompt', { status: 502 })
     }
 
     cacheSet(cacheKey, spec, TTL)
     return NextResponse.json(spec)
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Playlist composer failed' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Playlist composer failed', {
+      status: 500,
+    })
   }
 }

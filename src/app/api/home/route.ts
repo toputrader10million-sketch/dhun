@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { fetchPiped, parseStreamItem, cacheGet, cacheSet } from '@/lib/piped'
 import { ytWebSearch, ytMusicSearch } from '@/lib/ytmusic'
+import { emptyResultFallback, type DegradedNotice } from '@/lib/resilient'
 import type { HomeResponse, HomeSection, MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -145,6 +146,17 @@ export async function GET(req: NextRequest) {
   )
 
   const out: HomeResponse = { sections }
-  cacheSet(cacheKey, out, TTL)
-  return NextResponse.json(out)
+  // Q1.3 — all sections empty + a breaker open → serve stale cache with an
+  // honest degraded banner instead of caching the empty feed for 30 min.
+  const fallback = emptyResultFallback({
+    cacheKey,
+    out,
+    isEmpty: (v) => v.sections.every((s) => s.items.length === 0),
+    candidates: ['ytmusic', 'piped'],
+  })
+  if (fallback.cacheable) cacheSet(cacheKey, fallback.data, TTL)
+  const body = fallback.degraded
+    ? { ...fallback.data, degraded: fallback.degraded }
+    : fallback.data
+  return NextResponse.json(body)
 }

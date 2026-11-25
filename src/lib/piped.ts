@@ -2,6 +2,7 @@
 // Server-side only. Do NOT import from client components.
 import net from 'node:net'
 import type { MusicItem } from '@/lib/types'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 // Node's undici Happy-Eyeballs defaults to a 250ms per-attempt connect timeout;
 // some Piped instances take ~270ms to accept IPv4 connections, causing
@@ -33,18 +34,61 @@ interface CacheEntry {
 
 const globalForCache = globalThis as unknown as {
   __dhunPipedCache?: Map<string, CacheEntry>
+  __dhunCacheStats?: { hits: number; misses: number; staleHits: number; sets: number }
 }
 
 const cacheStore: Map<string, CacheEntry> =
   globalForCache.__dhunPipedCache ?? new Map<string, CacheEntry>()
 globalForCache.__dhunPipedCache = cacheStore
 
+// Q1.4 — hit/miss/stale counters for the /api/health cache hit-rate report.
+const cacheStatsStore =
+  globalForCache.__dhunCacheStats ?? { hits: 0, misses: 0, staleHits: 0, sets: 0 }
+globalForCache.__dhunCacheStats = cacheStatsStore
+
+export function cacheStats(): {
+  entries: number
+  hits: number
+  misses: number
+  staleHits: number
+  sets: number
+  hitRate: number
+} {
+  const total = cacheStatsStore.hits + cacheStatsStore.misses
+  return {
+    entries: cacheStore.size,
+    hits: cacheStatsStore.hits,
+    misses: cacheStatsStore.misses,
+    staleHits: cacheStatsStore.staleHits,
+    sets: cacheStatsStore.sets,
+    hitRate: total === 0 ? 0 : Math.round((cacheStatsStore.hits / total) * 1000) / 1000,
+  }
+}
+
 export function cacheGet<T>(key: string): T | undefined {
   const entry = cacheStore.get(key)
-  if (!entry) return undefined
-  if (entry.expires < Date.now()) {
-    cacheStore.delete(key)
+  if (!entry) {
+    cacheStatsStore.misses += 1
     return undefined
+  }
+  if (entry.expires < Date.now()) {
+    // Q1.3 — do NOT delete on read: expired entries stay available for
+    // stale-serving during outages (cacheSet's size guard sweeps them).
+    cacheStatsStore.misses += 1
+    return undefined
+  }
+  cacheStatsStore.hits += 1
+  return entry.data as T
+}
+
+/** Q1.3 — return the cached value even if expired (for degraded fallbacks). */
+export function cacheGetStale<T>(key: string): T | undefined {
+  const entry = cacheStore.get(key)
+  if (!entry) return undefined
+  if (entry.expires >= Date.now()) {
+    cacheStatsStore.hits += 1
+  } else {
+    cacheStatsStore.staleHits += 1
   }
   return entry.data as T
 }
@@ -81,41 +125,49 @@ export function getPreferredInstance(): string {
   return PIPED_INSTANCES[preferredInstance] ?? PIPED_INSTANCES[0]
 }
 
-/** Fetch a Piped API path, trying instances in order starting from the last healthy one. */
+/** Fetch a Piped API path, trying instances in order starting from the last healthy one.
+ *
+ * Q1.3 — the whole pool sits behind the "piped" circuit breaker: after 3
+ * consecutive all-instances-failed rotations the breaker opens and callers
+ * fail-fast (BreakerOpenError) so they can serve stale cache instead of
+ * burning ~30s of timeouts per request on a dead upstream.
+ */
 export async function fetchPiped<T>(path: string, timeoutMs = 6000): Promise<T> {
-  const errors: unknown[] = []
-  const order = [
-    preferredInstance,
-    ...PIPED_INSTANCES.map((_, i) => i).filter((i) => i !== preferredInstance),
-  ]
-  for (const idx of order) {
-    const base = PIPED_INSTANCES[idx]
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeoutMs)
-    try {
-      const res = await fetch(`${base}${path}`, {
-        signal: controller.signal,
-        redirect: 'follow',
-        headers: { accept: 'application/json' },
-        cache: 'no-store',
-      })
-      if (!res.ok) {
-        errors.push(new Error(`${base}${path} → HTTP ${res.status}`))
-        continue
+  return withBreaker('piped', async () => {
+    const errors: unknown[] = []
+    const order = [
+      preferredInstance,
+      ...PIPED_INSTANCES.map((_, i) => i).filter((i) => i !== preferredInstance),
+    ]
+    for (const idx of order) {
+      const base = PIPED_INSTANCES[idx]
+      const controller = new AbortController()
+      const timer = setTimeout(() => controller.abort(), timeoutMs)
+      try {
+        const res = await fetch(`${base}${path}`, {
+          signal: controller.signal,
+          redirect: 'follow',
+          headers: { accept: 'application/json' },
+          cache: 'no-store',
+        })
+        if (!res.ok) {
+          errors.push(new Error(`${base}${path} → HTTP ${res.status}`))
+          continue
+        }
+        const data = (await res.json()) as T
+        markHealthy(idx)
+        return data
+      } catch (err) {
+        errors.push(err instanceof Error ? err : new Error(String(err)))
+      } finally {
+        clearTimeout(timer)
       }
-      const data = (await res.json()) as T
-      markHealthy(idx)
-      return data
-    } catch (err) {
-      errors.push(err instanceof Error ? err : new Error(String(err)))
-    } finally {
-      clearTimeout(timer)
     }
-  }
-  throw new AggregateError(
-    errors.filter((e) => e instanceof Error),
-    `All ${PIPED_INSTANCES.length} Piped instances failed for ${path}`
-  )
+    throw new AggregateError(
+      errors.filter((e) => e instanceof Error),
+      `All ${PIPED_INSTANCES.length} Piped instances failed for ${path}`
+    )
+  })
 }
 
 // ---------- item parsing ----------

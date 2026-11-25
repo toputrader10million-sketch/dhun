@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { ytMusicSearch } from '@/lib/ytmusic'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -100,10 +102,14 @@ async function planWithLLM(
       { role: 'user', content: message },
     ]
 
-    const completion = await zai.chat.completions.create({
-      messages,
-      thinking: { type: 'disabled' },
-    })
+    const completion = await withBreaker(
+      'llm',
+      () =>
+        zai.chat.completions.create({
+          messages,
+          thinking: { type: 'disabled' },
+        })
+    )
     const text = completion.choices[0]?.message?.content?.trim()
     if (!text) return null
     const jsonText = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
@@ -233,7 +239,7 @@ export async function POST(req: NextRequest) {
     }
     const message = (body.message ?? '').trim()
     if (!message) {
-      return NextResponse.json({ error: 'Missing "message"' }, { status: 400 })
+      return apiError('Missing "message"', { status: 400 })
     }
     const history = Array.isArray(body.history)
       ? body.history
@@ -263,9 +269,8 @@ export async function POST(req: NextRequest) {
     cacheSet(cacheKey, out, COPILOT_TTL)
     return NextResponse.json(out)
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Copilot failed' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Copilot failed', {
+      status: 500,
+    })
   }
 }

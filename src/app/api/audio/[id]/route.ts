@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { pickAudioStream, proxyMediaResponse, resolveStreams } from '@/lib/streams'
 
 export const runtime = 'nodejs'
@@ -34,15 +35,17 @@ function isAllowedUpstream(raw: string): boolean {
 //                    extraction is blocked but the user's device succeeded.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!id) return NextResponse.json({ error: 'Missing stream id' }, { status: 400 })
+  if (!id) return apiError('Missing stream id', { status: 400 })
 
   const upstreamRaw = req.nextUrl.searchParams.get('upstream')
   if (upstreamRaw) {
     if (!isAllowedUpstream(upstreamRaw)) {
-      return NextResponse.json(
-        { error: 'Upstream host not allowed', reason: 'upstream-not-allowed' },
-        { status: 400 }
-      )
+      return apiError('Upstream host not allowed', {
+        status: 400,
+        code: 'upstream-unavailable',
+        retryable: false,
+        reason: 'upstream-not-allowed',
+      })
     }
     const contentType = req.nextUrl.searchParams.get('ct') || 'audio/mp4'
     try {
@@ -55,10 +58,12 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err)
       // Expired signed URLs (~6h) land here — the client should re-resolve.
-      return NextResponse.json(
-        { error: `Upstream fetch failed: ${msg}`, reason: 'upstream-expired' },
-        { status: 502 }
-      )
+      return apiError(`Upstream fetch failed: ${msg}`, {
+        status: 502,
+        code: 'upstream-unavailable',
+        retryable: true,
+        reason: 'upstream-expired',
+      })
     }
   }
 
@@ -69,7 +74,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const maxBitrate = maxBitrateRaw ? parseFloat(maxBitrateRaw) : null
     const best = pickAudioStream(resolved.audioStreams, maxBitrate)
     if (!best) {
-      return NextResponse.json({ error: 'No audio streams available' }, { status: 502 })
+      return apiError('No audio streams available', { status: 502 })
     }
 
     return await proxyMediaResponse(
@@ -82,15 +87,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const detail = err instanceof AggregateError
       ? err.errors.map((e) => (e instanceof Error ? e.message : String(e)))
       : [err instanceof Error ? err.message : String(err)]
-    return NextResponse.json(
-      {
-        error: `Failed to resolve audio for ${id}`,
-        // Machine-readable reason — the service worker surfaces it to the
-        // offline download UI so we can give an honest, specific message.
-        reason: 'youtube-download-blocked',
-        detail,
-      },
-      { status: 502 }
-    )
+    return apiError(`Failed to resolve audio for ${id}`, {
+      status: 502,
+      // Machine-readable reason — the service worker surfaces it to the
+      // offline download UI so we can give an honest, specific message.
+      code: 'upstream-unavailable',
+      retryable: false,
+      reason: 'youtube-download-blocked',
+      detail,
+    })
   }
 }

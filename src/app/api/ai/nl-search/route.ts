@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -94,22 +96,26 @@ async function planWithLLM(rawQuery: string): Promise<NlPlan | null> {
   try {
     const { default: ZAI } = await import('z-ai-web-dev-sdk')
     const zai = await ZAI.create()
-    const completion = await zai.chat.completions.create({
-      messages: [
-        {
-          role: 'assistant',
-          content:
-            'You are the search planner for Dhun, a music app. The user describes music in natural language ' +
-            '(any language: Bangla, English, Hindi…). Return ONLY valid JSON (no markdown) shaped as: ' +
-            '{"interpretation": "<one short line in the user\'s language summarizing what they want>", ' +
-            '"queries": ["1-3 youtube music search queries, mixing artist/genre/mood keywords", ...], ' +
-            '"chips": ["3-5 short mood/genre tags like romantic, lofi, 90s"]}. ' +
-            'Queries must work on YouTube Music search. Keep each query under 8 words.',
-        },
-        { role: 'user', content: rawQuery },
-      ],
-      thinking: { type: 'disabled' },
-    })
+    const completion = await withBreaker(
+      'llm',
+      () =>
+        zai.chat.completions.create({
+          messages: [
+            {
+              role: 'assistant',
+              content:
+                'You are the search planner for Dhun, a music app. The user describes music in natural language ' +
+                '(any language: Bangla, English, Hindi…). Return ONLY valid JSON (no markdown) shaped as: ' +
+                '{"interpretation": "<one short line in the user\'s language summarizing what they want>", ' +
+                '"queries": ["1-3 youtube music search queries, mixing artist/genre/mood keywords", ...], ' +
+                '"chips": ["3-5 short mood/genre tags like romantic, lofi, 90s"]}. ' +
+                'Queries must work on YouTube Music search. Keep each query under 8 words.',
+            },
+            { role: 'user', content: rawQuery },
+          ],
+          thinking: { type: 'disabled' },
+        })
+    )
     const text = completion.choices[0]?.message?.content?.trim()
     if (!text) return null
     const jsonText = text.slice(text.indexOf('{'), text.lastIndexOf('}') + 1)
@@ -133,7 +139,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { query?: string }
     const query = (body.query ?? '').trim()
     if (!query) {
-      return NextResponse.json({ error: 'Missing "query"' }, { status: 400 })
+      return apiError('Missing "query"', { status: 400 })
     }
 
     const cacheKey = `nl-search:${query.toLowerCase()}`
@@ -150,9 +156,8 @@ export async function POST(req: NextRequest) {
     const body = (await req.json().catch(() => ({}))) as { query?: string }
     const plan = body.query ? planWithRules(body.query) : null
     if (plan) return NextResponse.json(plan)
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Planner failed' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Planner failed', {
+      status: 500,
+    })
   }
 }

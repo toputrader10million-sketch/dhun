@@ -13,6 +13,7 @@ import { TrackCardRow } from '@/components/track-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/empty-state'
 import { useT } from '@/lib/i18n'
+import { reportDegraded } from '@/store/degraded'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 
@@ -55,6 +56,7 @@ export function DiscoveryFeed() {
     fetch(`/api/discover?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d: DiscoverResponse) => {
+        reportDegraded(d)
         if (alive) setData(d)
       })
       .catch(() => {

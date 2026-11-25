@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { resolveAudiusStreamUrl } from '@/lib/audius'
 import { proxyMediaResponse } from '@/lib/streams'
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic'
 // GET → streaming proxy for Audius tracks (CDN mp3), Range-aware, piped through.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
-  if (!id) return NextResponse.json({ error: 'Missing track id' }, { status: 400 })
+  if (!id) return apiError('Missing track id', { status: 400 })
 
   try {
     const streamUrl = await resolveAudiusStreamUrl(id)
@@ -20,9 +21,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     )
     return response
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Audius stream failed' },
-      { status: 502 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Audius stream failed', {
+      status: 502,
+    })
   }
 }

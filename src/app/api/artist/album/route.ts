@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cacheGet, cacheSet } from '@/lib/piped'
 import { ytMusicSearch } from '@/lib/ytmusic'
 import type { MusicItem } from '@/lib/types'
@@ -42,7 +43,7 @@ export async function GET(req: NextRequest) {
   const artist = (req.nextUrl.searchParams.get('artist') ?? '').trim()
   const album = (req.nextUrl.searchParams.get('album') ?? '').trim()
   if (!artist || !album) {
-    return NextResponse.json({ error: 'Missing "artist" or "album"' }, { status: 400 })
+    return apiError('Missing "artist" or "album"', { status: 400 })
   }
 
   const key = `album:${artist.toLowerCase()}:${album.toLowerCase()}`

@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { ytMusicSearch } from '@/lib/ytmusic'
@@ -144,9 +145,9 @@ export async function GET() {
     cacheSet(cacheKey, out, TTL)
     return NextResponse.json(out)
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to build daily mix', mix: null },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to build daily mix', {
+      status: 500,
+      mix: null,
+    })
   }
 }

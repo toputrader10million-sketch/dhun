@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { ensureNewTables } from '@/lib/db-bootstrap'
@@ -23,7 +24,11 @@ interface HandoffItem {
 export async function POST(req: NextRequest) {
   try {
     if (!(await ensureNewTables())) {
-      return NextResponse.json({ error: 'Storage warming up — retry shortly' }, { status: 503 })
+      return apiError('Storage warming up — retry shortly', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+      })
     }
     const user = await getOrCreateUser()
     const body = (await req.json()) as {
@@ -36,7 +41,7 @@ export async function POST(req: NextRequest) {
     }
     const items = Array.isArray(body.items) ? body.items.slice(0, MAX_ITEMS) : []
     if (items.length === 0) {
-      return NextResponse.json({ error: 'Queue is empty — nothing to hand off' }, { status: 400 })
+      return apiError('Queue is empty — nothing to hand off', { status: 400 })
     }
     const index = Math.max(0, Math.min(items.length - 1, Math.round(body.index ?? 0)))
     const position = Math.max(0, Math.round(body.position ?? 0))
@@ -52,6 +57,7 @@ export async function POST(req: NextRequest) {
       },
     })
     // Prune: keep only the newest MAX_KEPT handoffs for this user.
+    let pruned = 0
     try {
       const old = await db.queueHandoff.findMany({
         where: { userId: user.id },
@@ -60,17 +66,17 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       })
       if (old.length > 0) {
-        await db.queueHandoff.deleteMany({ where: { id: { in: old.map((h) => h.id) } } })
+        const del = await db.queueHandoff.deleteMany({ where: { id: { in: old.map((h) => h.id) } } })
+        pruned = del.count
       }
     } catch {
       /* pruning is best-effort */
     }
-    return NextResponse.json({ id: created.id, createdAt: created.createdAt.toISOString() })
+    return NextResponse.json({ id: created.id, createdAt: created.createdAt.toISOString(), pruned })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to publish handoff' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to publish handoff', {
+      status: 500,
+    })
   }
 }
 
@@ -82,7 +88,11 @@ export async function GET() {
     // DDL list predates it), so a Turso database seeded from the early
     // schema.sql 500s here. Self-heal on first request.
     if (!(await ensureNewTables())) {
-      return NextResponse.json({ error: 'Storage warming up — retry shortly' }, { status: 503 })
+      return apiError('Storage warming up — retry shortly', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+      })
     }
     const rows = await db.queueHandoff.findMany({
       where: { userId: user.id },
@@ -111,9 +121,8 @@ export async function GET() {
     })
     return NextResponse.json({ handoffs })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to list handoffs' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to list handoffs', {
+      status: 500,
+    })
   }
 }

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/empty-state'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
+import { reportDegraded } from '@/store/degraded'
 import { useT } from '@/lib/i18n'
 import { useSettings } from '@/store/settings'
 import { cn } from '@/lib/utils'
@@ -110,6 +111,7 @@ export function ChartsView() {
       return fetch(`/api/charts?${params.toString()}`)
         .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
         .then((d) => {
+          reportDegraded(d)
           if (alive) setSections(d.sections ?? [])
         })
         .catch(() => {

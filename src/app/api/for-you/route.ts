@@ -1,8 +1,10 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import { ytMusicSearch } from '@/lib/ytmusic'
-import { cacheGet, cacheSet } from '@/lib/piped'
+import { cacheGet, cacheSet, cacheGetStale } from '@/lib/piped'
+import { openBreaker, degradedNotice, UPSTREAM_LABELS } from '@/lib/resilient'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -84,15 +86,22 @@ export async function GET() {
       .map((r) => r.value)
 
     const out = { sections }
+    // Q1.3 — empty result + open breaker → stale cache with honest banner.
+    if (sections.length === 0) {
+      const open = openBreaker(['ytmusic', 'piped'])
+      if (open) {
+        const stale = cacheGetStale<{ sections: ForYouSection[] }>(cacheKey)
+        const degraded = degradedNotice(UPSTREAM_LABELS[open] ?? open)
+        if (stale) return NextResponse.json({ ...stale, degraded })
+        return NextResponse.json({ ...out, degraded })
+      }
+    }
     cacheSet(cacheKey, out, TTL)
     return NextResponse.json(out)
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: err instanceof Error ? err.message : 'Failed to build recommendations',
-        sections: [],
-      },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to build recommendations', {
+      status: 500,
+      sections: [],
+    })
   }
 }

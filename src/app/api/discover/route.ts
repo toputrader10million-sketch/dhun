@@ -4,6 +4,7 @@ import { trendingTracks } from '@/lib/audius'
 import { db } from '@/lib/db'
 import { ensureNewTables } from '@/lib/db-bootstrap'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { emptyResultFallback } from '@/lib/resilient'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -106,6 +107,14 @@ export async function GET(req: NextRequest) {
   }
 
   const out = { related, loved, fresh }
-  cacheSet(cacheKey, out, TTL)
-  return NextResponse.json(out)
+  // Q1.3 — fully empty feed + open breaker → stale cache with honest banner.
+  const fallback = emptyResultFallback({
+    cacheKey,
+    out,
+    isEmpty: (v) => !v.related && !v.loved && !v.fresh,
+    candidates: ['ytmusic', 'piped', 'audius'],
+  })
+  if (fallback.cacheable) cacheSet(cacheKey, fallback.data, TTL)
+  const body = fallback.degraded ? { ...fallback.data, degraded: fallback.degraded } : fallback.data
+  return NextResponse.json(body)
 }

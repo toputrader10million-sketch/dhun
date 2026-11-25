@@ -4,6 +4,7 @@
 // streamable AND downloadable (audiodownload field) — the guaranteed offline
 // source YouTube can never offer.
 import { type MusicItem } from '@/lib/types'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 const API_BASE = 'https://api.jamendo.com/v3.0'
 const FETCH_TIMEOUT_MS = 8000
@@ -53,18 +54,22 @@ export async function jamendoFetch(
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
-    const res = await fetch(`${API_BASE}${path}?${qs.toString()}`, {
-      signal: controller.signal,
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
+    // Q1.3 — only the network round-trip sits behind the "jamendo" breaker;
+    // key errors (client misconfig) are parsed OUTSIDE so they never trip it.
+    const res = await withBreaker('jamendo', async () => {
+      const r = await fetch(`${API_BASE}${path}?${qs.toString()}`, {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+      })
+      if (!r.ok) throw new Error(`Jamendo HTTP ${r.status}`)
+      return (await r.json()) as JamendoResponse
     })
-    if (!res.ok) throw new Error(`Jamendo HTTP ${res.status}`)
-    const data = (await res.json()) as JamendoResponse
-    if (data.headers?.status === 'failed') {
-      const msg = data.headers.error_message || 'Jamendo request failed'
-      throw new Error(data.headers.code === 5 ? 'jamendo-key-invalid' : msg)
+    if (res.headers?.status === 'failed') {
+      const msg = res.headers.error_message || 'Jamendo request failed'
+      throw new Error(res.headers.code === 5 ? 'jamendo-key-invalid' : msg)
     }
-    return Array.isArray(data.results) ? data.results : []
+    return Array.isArray(res.results) ? res.results : []
   } finally {
     clearTimeout(timer)
   }

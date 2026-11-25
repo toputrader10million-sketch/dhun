@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cleanTitle, cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 import type { LyricsResponse } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -34,14 +36,19 @@ async function lrcFetch(path: string, timeoutMs = 8000): Promise<unknown> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(`${LRCLIB}${path}`, {
-      signal: controller.signal,
-      headers: { accept: 'application/json' },
-      cache: 'no-store',
-      redirect: 'follow',
+    // Q1.3 — LRCLIB sits behind the "lrclib" breaker: when it is down, the
+    // 5-step cascade below skips straight to honest "none" instead of
+    // throwing 5 sequential 8s timeouts at a dead host.
+    return await withBreaker('lrclib', async () => {
+      const res = await fetch(`${LRCLIB}${path}`, {
+        signal: controller.signal,
+        headers: { accept: 'application/json' },
+        cache: 'no-store',
+        redirect: 'follow',
+      })
+      if (!res.ok) throw new Error(`LRCLIB HTTP ${res.status}`)
+      return await res.json()
     })
-    if (!res.ok) throw new Error(`LRCLIB HTTP ${res.status}`)
-    return await res.json()
   } finally {
     clearTimeout(timer)
   }
@@ -76,19 +83,22 @@ async function chartLyricsLookup(artist: string, song: string, timeoutMs = 7000)
     const url =
       `https://api.chartlyrics.com/apiv1.asmx/SearchLyricDirect` +
       `?artist=${encodeURIComponent(artist)}&song=${encodeURIComponent(song)}`
-    const res = await fetch(url, { signal: controller.signal, cache: 'no-store' })
-    if (!res.ok) return null
-    const xml = await res.text()
-    const lyric = /<Lyric>([\s\S]*?)<\/Lyric>/i.exec(xml)?.[1]?.trim()
-    if (!lyric || lyric.length < 40 || /not found/i.test(lyric.slice(0, 40))) return null
-    return lyric
-      .replace(/<[^>]+>/g, '')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#39;/g, "'")
-      .trim()
+    // Q1.3 — chartlyrics breaker (soft-fails to null; only network throws trip it)
+    return await withBreaker('chartlyrics', async () => {
+      const res = await fetch(url, { signal: controller.signal, cache: 'no-store' })
+      if (!res.ok) return null
+      const xml = await res.text()
+      const lyric = /<Lyric>([\s\S]*?)<\/Lyric>/i.exec(xml)?.[1]?.trim()
+      if (!lyric || lyric.length < 40 || /not found/i.test(lyric.slice(0, 40))) return null
+      return lyric
+        .replace(/<[^>]+>/g, '')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, "'")
+        .trim()
+    })
   } catch {
     return null
   } finally {
@@ -103,7 +113,7 @@ export async function GET(req: NextRequest) {
   const duration = Number.isFinite(durationParam) && durationParam > 0 ? Math.round(durationParam) : undefined
 
   if (!title) {
-    return NextResponse.json({ error: 'Missing "title" parameter' }, { status: 400 })
+    return apiError('Missing "title" parameter', { status: 400 })
   }
 
   const cacheKey = `lyrics:${title.toLowerCase()}|${artist.toLowerCase()}|${duration ?? ''}`

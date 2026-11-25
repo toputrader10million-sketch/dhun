@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest) {
   const lat = Number(req.nextUrl.searchParams.get('lat'))
   const lon = Number(req.nextUrl.searchParams.get('lon'))
   if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-    return NextResponse.json({ error: 'Invalid coordinates' }, { status: 400 })
+    return apiError('Invalid coordinates', { status: 400 })
   }
 
   // Bucket to 1° to keep the cache useful across users nearby
@@ -54,13 +56,15 @@ export async function GET(req: NextRequest) {
       `&current=temperature_2m,weather_code,is_day&timezone=auto`
     const ctrl = new AbortController()
     const t = setTimeout(() => ctrl.abort(), 6000)
-    const res = await fetch(url, { signal: ctrl.signal, cache: 'no-store' })
+    const res = await withBreaker('openmeteo', async () => {
+      const r = await fetch(url, { signal: ctrl.signal, cache: 'no-store' })
+      if (!r.ok) throw new Error(`open-meteo ${r.status}`)
+      return (await r.json()) as {
+        current?: { temperature_2m?: number; weather_code?: number; is_day?: number }
+      }
+    })
     clearTimeout(t)
-    if (!res.ok) throw new Error(`open-meteo ${res.status}`)
-    const d = (await res.json()) as {
-      current?: { temperature_2m?: number; weather_code?: number; is_day?: number }
-    }
-    const cur = d.current ?? {}
+    const cur = res.current ?? {}
     const desc = describe(cur.weather_code ?? 0)
     const out: WeatherInfo = {
       temp: Math.round(cur.temperature_2m ?? 0),
@@ -72,9 +76,8 @@ export async function GET(req: NextRequest) {
     cacheSet(cacheKey, out, TTL)
     return NextResponse.json(out)
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Weather unavailable' },
-      { status: 502 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Weather unavailable', {
+      status: 502,
+    })
   }
 }

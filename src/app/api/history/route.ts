@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import type { LibraryTrack } from '@/lib/types'
@@ -31,10 +32,10 @@ export async function GET(req: NextRequest) {
     }))
     return NextResponse.json({ items })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load history', items: [] },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to load history', {
+      status: 500,
+      items: [],
+    })
   }
 }
 
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
     const artist = body.artist
     const source = body.source ?? 'yt'
     if (!trackId || !title || !artist) {
-      return NextResponse.json({ error: 'id, title and artist are required' }, { status: 400 })
+      return apiError('id, title and artist are required', { status: 400 })
     }
     const data = {
       title,
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
       duration: typeof body.duration === 'number' ? body.duration : 0,
     }
     // dedupe: replace any earlier entry of the same track for this user
-    await db.historyEntry.deleteMany({
+    const deduped = await db.historyEntry.deleteMany({
       where: { userId: user.id, source, trackId },
     })
     await db.historyEntry.create({ data: { userId: user.id, source, trackId, ...data } })
@@ -78,15 +79,17 @@ export async function POST(req: NextRequest) {
       skip: HISTORY_CAP,
       select: { id: true },
     })
+    let pruned = 0
     if (old.length > 0) {
-      await db.historyEntry.deleteMany({ where: { id: { in: old.map((o) => o.id) } } })
+      const del = await db.historyEntry.deleteMany({ where: { id: { in: old.map((o) => o.id) } } })
+      pruned = del.count
     }
-    return NextResponse.json({ ok: true })
+    // Q1.2 — integrity counters: the write reports exactly what it did.
+    return NextResponse.json({ ok: true, deduped: deduped.count, pruned, replaced: 1 })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to record history' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to record history', {
+      status: 500,
+    })
   }
 }
 
@@ -94,12 +97,12 @@ export async function POST(req: NextRequest) {
 export async function DELETE() {
   try {
     const user = await getOrCreateUser()
-    await db.historyEntry.deleteMany({ where: { userId: user.id } })
-    return NextResponse.json({ ok: true })
+    // Q1.2 — report how many rows actually left the table (never a silent no-op)
+    const removed = await db.historyEntry.deleteMany({ where: { userId: user.id } })
+    return NextResponse.json({ ok: true, removed: removed.count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to clear history' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to clear history', {
+      status: 500,
+    })
   }
 }

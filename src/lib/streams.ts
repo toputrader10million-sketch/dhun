@@ -9,6 +9,7 @@
 //   - pick the highest-quality compatible audio stream
 import type { AudioStream } from '@/lib/types'
 import { PIPED_INSTANCES } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 export interface PipedAudioStream {
   url?: string
@@ -82,36 +83,42 @@ export async function resolveStreams(id: string, maxInstances = 3): Promise<Reso
   const cached = streamCache.get(id)
   if (cached && cached.expires > Date.now()) return cached.data
 
-  // Rotate through instances starting from the last healthy one; race in parallel.
-  const start = PIPED_INSTANCES[preferredInstance] ? preferredInstance : 0
-  const order: string[] = []
-  for (let i = 0; i < Math.min(maxInstances, PIPED_INSTANCES.length); i++) {
-    order.push(PIPED_INSTANCES[(start + i) % PIPED_INSTANCES.length])
-  }
-
-  const results = await Promise.allSettled(order.map((base) => tryInstance(base, id)))
-  const fulfilled = results.find((r) => r.status === 'fulfilled') as
-    | { status: 'fulfilled'; value: ResolvedStreams }
-    | undefined
-  if (fulfilled) {
-    const resolved = fulfilled.value
-    // remember which slot worked so the next resolve starts there
-    const idx = PIPED_INSTANCES.indexOf(resolved.instance)
-    if (idx >= 0) preferredInstance = idx
-    streamCache.set(id, { data: resolved, expires: Date.now() + RESOLVE_TTL_MS })
-    if (streamCache.size > 300) {
-      for (const [k, v] of streamCache) if (v.expires < Date.now()) streamCache.delete(k)
+  // Q1.3 — the resolve race sits behind the "streams" breaker: when every
+  // instance is failing, further resolves fail fast instead of burning
+  // RESOLVE_TIMEOUT_MS per attempt (stale stream URLs are never served —
+  // they expire server-side within minutes).
+  return withBreaker('streams', async () => {
+    // Rotate through instances starting from the last healthy one; race in parallel.
+    const start = PIPED_INSTANCES[preferredInstance] ? preferredInstance : 0
+    const order: string[] = []
+    for (let i = 0; i < Math.min(maxInstances, PIPED_INSTANCES.length); i++) {
+      order.push(PIPED_INSTANCES[(start + i) % PIPED_INSTANCES.length])
     }
-    return resolved
-  }
 
-  const errors = results.map((r) =>
-    r.status === 'rejected' ? (r.reason instanceof Error ? r.reason.message : String(r.reason)) : 'skipped'
-  )
-  throw new AggregateError(
-    errors.map((e) => new Error(e)),
-    `All Piped instances failed for /streams/${id}`
-  )
+    const results = await Promise.allSettled(order.map((base) => tryInstance(base, id)))
+    const fulfilled = results.find((r) => r.status === 'fulfilled') as
+      | { status: 'fulfilled'; value: ResolvedStreams }
+      | undefined
+    if (fulfilled) {
+      const resolved = fulfilled.value
+      // remember which slot worked so the next resolve starts there
+      const idx = PIPED_INSTANCES.indexOf(resolved.instance)
+      if (idx >= 0) preferredInstance = idx
+      streamCache.set(id, { data: resolved, expires: Date.now() + RESOLVE_TTL_MS })
+      if (streamCache.size > 300) {
+        for (const [k, v] of streamCache) if (v.expires < Date.now()) streamCache.delete(k)
+      }
+      return resolved
+    }
+
+    const errors = results.map((r) =>
+      r.status === 'rejected' ? (r.reason instanceof Error ? r.reason.message : String(r.reason)) : 'skipped'
+    )
+    throw new AggregateError(
+      errors.map((e) => new Error(e)),
+      `All Piped instances failed for /streams/${id}`
+    )
+  })
 }
 
 function sortStreamsDesc(streams: AudioStream[]): AudioStream[] {

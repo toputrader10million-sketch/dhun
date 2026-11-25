@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { withBreaker } from '@/lib/circuit-breaker'
 import { ytMusicSearch } from '@/lib/ytmusic'
 import { searchTracks } from '@/lib/audius'
 import type { MusicItem } from '@/lib/types'
@@ -80,6 +82,9 @@ async function itunesLookup(name: string): Promise<{
   const ctrl = new AbortController()
   const timer = setTimeout(() => ctrl.abort(), 8000)
   try {
+    // Q1.3 — iTunes lookups sit behind the "itunes" breaker; the artist page
+    // degrades to YouTube/Audius-only when iTunes is unreachable.
+    return await withBreaker('itunes', async () => {
     // 1) find the artist id
     const searchUrl = `https://itunes.apple.com/search?term=${encodeURIComponent(name)}&entity=musicArtist&limit=1`
     const sRes = await fetch(searchUrl, { signal: ctrl.signal, cache: 'no-store' })
@@ -144,6 +149,7 @@ async function itunesLookup(name: string): Promise<{
       albums,
       albumTracks,
     }
+    })
   } catch {
     return null
   } finally {
@@ -154,7 +160,7 @@ async function itunesLookup(name: string): Promise<{
 export async function GET(req: NextRequest) {
   const name = (req.nextUrl.searchParams.get('name') ?? '').trim()
   if (!name) {
-    return NextResponse.json({ error: 'Missing "name"' }, { status: 400 })
+    return apiError('Missing "name"', { status: 400 })
   }
   const key = `artist:${name.toLowerCase()}`
   const cached = cacheGet<ArtistResponse>(key)

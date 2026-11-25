@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import type { PlaylistDetail, PlaylistItemData } from '@/lib/types'
@@ -19,7 +20,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
       },
     })
     if (!row) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
     const items: PlaylistItemData[] = row.items.map((it) => ({
       id: it.id,
@@ -42,10 +43,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
     }
     return NextResponse.json(detail)
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load playlist' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to load playlist', {
+      status: 500,
+    })
   }
 }
 
@@ -57,13 +57,13 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     const body = (await req.json()) as { name?: string; description?: string; cover?: string }
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
     const data: { name?: string; description?: string | null; cover?: string | null } = {}
     if (body.name !== undefined) {
       const name = body.name.trim()
       if (!name) {
-        return NextResponse.json({ error: 'Playlist name cannot be empty' }, { status: 400 })
+        return apiError('Playlist name cannot be empty', { status: 400 })
       }
       data.name = name
     }
@@ -71,12 +71,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
     if (body.cover !== undefined) data.cover = body.cover || null
 
     await db.playlist.update({ where: { id: playlist.id }, data })
-    return NextResponse.json({ ok: true })
+    // Q1.2 — matched: the update touched exactly the verified-owned row
+    return NextResponse.json({ ok: true, matched: 1 })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to update playlist' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to update playlist', {
+      status: 500,
+    })
   }
 }
 
@@ -87,14 +87,13 @@ export async function DELETE(_req: NextRequest, { params }: { params: Promise<{ 
     const user = await getOrCreateUser()
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
     await db.playlist.delete({ where: { id: playlist.id } })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, removed: 1 })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to delete playlist' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to delete playlist', {
+      status: 500,
+    })
   }
 }

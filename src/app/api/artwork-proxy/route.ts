@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 
 export const runtime = 'nodejs'
 
@@ -25,16 +26,16 @@ function allowed(u: URL): boolean {
 
 export async function GET(req: NextRequest) {
   const raw = req.nextUrl.searchParams.get('u') ?? ''
-  if (!raw) return NextResponse.json({ error: 'Missing u' }, { status: 400 })
+  if (!raw) return apiError('Missing u', { status: 400 })
 
   let target: URL
   try {
     target = new URL(raw)
   } catch {
-    return NextResponse.json({ error: 'Invalid url' }, { status: 400 })
+    return apiError('Invalid url', { status: 400 })
   }
   if (!/^https?:$/.test(target.protocol) || !allowed(target)) {
-    return NextResponse.json({ error: 'Upstream not allowed' }, { status: 403 })
+    return apiError('Upstream not allowed', { status: 403, code: 'bad-request' })
   }
 
   try {
@@ -47,16 +48,16 @@ export async function GET(req: NextRequest) {
     })
     clearTimeout(t)
     if (!upstream.ok || !upstream.body) {
-      return NextResponse.json({ error: 'Upstream fetch failed' }, { status: 502 })
+      return apiError('Upstream fetch failed', { status: 502 })
     }
     const ctype = upstream.headers.get('content-type') ?? 'image/jpeg'
     if (!/^image\//.test(ctype)) {
-      return NextResponse.json({ error: 'Not an image' }, { status: 415 })
+      return apiError('Not an image', { status: 415, code: 'bad-request' })
     }
     const buf = await upstream.arrayBuffer()
     // Cap at 8 MB — artwork images are far smaller; guard memory anyway.
     if (buf.byteLength > 8 * 1024 * 1024) {
-      return NextResponse.json({ error: 'Image too large' }, { status: 413 })
+      return apiError('Image too large', { status: 413 })
     }
     return new NextResponse(buf, {
       status: 200,
@@ -66,9 +67,8 @@ export async function GET(req: NextRequest) {
       },
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Proxy failed' },
-      { status: 502 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Proxy failed', {
+      status: 502,
+    })
   }
 }

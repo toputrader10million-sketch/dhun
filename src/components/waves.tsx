@@ -14,6 +14,7 @@ import { TrackCardRow } from '@/components/track-card'
 import { Skeleton } from '@/components/ui/skeleton'
 import { WAVES, type WaveMeta, type WaveTrackResponse } from '@/lib/waves'
 import { useT } from '@/lib/i18n'
+import { reportDegraded } from '@/store/degraded'
 import type { MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { cn } from '@/lib/utils'
@@ -47,6 +48,7 @@ export function WavesStrip() {
       const res = await fetch(`/api/waves?id=${encodeURIComponent(id)}`)
       if (!res.ok) throw new Error(String(res.status))
       const d = (await res.json()) as { wave: WaveTrackResponse }
+      reportDegraded(d)
       setTracks((prev) => ({ ...prev, [id]: d.wave.items }))
       if (d.wave.items.length === 0) setFailedId(id)
     } catch {

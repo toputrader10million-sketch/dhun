@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 
@@ -21,7 +22,7 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
     const user = await getOrCreateUser()
     const row = await db.queueHandoff.findUnique({ where: { id } })
     if (!row || row.userId !== user.id) {
-      return NextResponse.json({ error: 'Handoff not found' }, { status: 404 })
+      return apiError('Handoff not found', { status: 404 })
     }
     let items: HandoffItem[] = []
     try {
@@ -38,10 +39,9 @@ export async function GET(_req: NextRequest, ctx: { params: Promise<{ id: string
       createdAt: row.createdAt.toISOString(),
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load handoff' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to load handoff', {
+      status: 500,
+    })
   }
 }
 
@@ -52,14 +52,13 @@ export async function DELETE(_req: NextRequest, ctx: { params: Promise<{ id: str
     const user = await getOrCreateUser()
     const row = await db.queueHandoff.findUnique({ where: { id } })
     if (!row || row.userId !== user.id) {
-      return NextResponse.json({ error: 'Handoff not found' }, { status: 404 })
+      return apiError('Handoff not found', { status: 404 })
     }
     await db.queueHandoff.delete({ where: { id } })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, removed: 1 })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to delete handoff' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to delete handoff', {
+      status: 500,
+    })
   }
 }

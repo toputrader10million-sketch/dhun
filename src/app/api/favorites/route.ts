@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 import type { LibraryTrack } from '@/lib/types'
@@ -26,10 +27,10 @@ export async function GET() {
     }))
     return NextResponse.json({ items })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to load favorites', items: [] },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to load favorites', {
+      status: 500,
+      items: [],
+    })
   }
 }
 
@@ -51,7 +52,7 @@ export async function POST(req: NextRequest) {
     const artist = body.artist
     const source = body.source ?? 'yt'
     if (!trackId || !title || !artist) {
-      return NextResponse.json({ error: 'id, title and artist are required' }, { status: 400 })
+      return apiError('id, title and artist are required', { status: 400 })
     }
     const data = {
       title,
@@ -66,10 +67,9 @@ export async function POST(req: NextRequest) {
     })
     return NextResponse.json({ ok: true })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to save favorite' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to save favorite', {
+      status: 500,
+    })
   }
 }
 
@@ -82,7 +82,7 @@ export async function DELETE(req: NextRequest) {
     const user = await getOrCreateUser()
     const trackId = req.nextUrl.searchParams.get('trackId')
     if (!trackId) {
-      return NextResponse.json({ error: 'Missing "trackId" parameter' }, { status: 400 })
+      return apiError('Missing "trackId" parameter', { status: 400 })
     }
     const source = req.nextUrl.searchParams.get('source')
     const removed = await db.favorite.deleteMany({
@@ -90,9 +90,8 @@ export async function DELETE(req: NextRequest) {
     })
     return NextResponse.json({ ok: true, removed: removed.count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to delete favorite' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to delete favorite', {
+      status: 500,
+    })
   }
 }

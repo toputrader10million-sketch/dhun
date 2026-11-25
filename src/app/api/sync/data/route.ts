@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser, getUserCounts, serializeUser } from '@/lib/user'
 
@@ -57,10 +58,9 @@ export async function GET() {
       })),
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to export data' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to export data', {
+      status: 500,
+    })
   }
 }
 
@@ -274,9 +274,8 @@ export async function POST(req: NextRequest) {
       },
     })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to import data' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to import data', {
+      status: 500,
+    })
   }
 }

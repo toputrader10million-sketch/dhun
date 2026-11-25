@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { ensureNewTables } from '@/lib/db-bootstrap'
 
@@ -22,21 +23,26 @@ function clean(v: unknown, cap: number): string {
 export async function POST(req: NextRequest) {
   try {
     if (!(await ensureNewTables())) {
-      return NextResponse.json({ ok: false }, { status: 503 })
+      return apiError('Storage warming up — retry shortly', {
+        status: 503,
+        code: 'storage-warming-up',
+        retryable: true,
+        ok: false,
+      })
     }
     const raw = await req.text()
     if (raw.length > MAX_BODY) {
-      return NextResponse.json({ ok: false, error: 'Payload too large' }, { status: 413 })
+      return apiError('Payload too large', { status: 413, ok: false })
     }
     let body: Record<string, unknown> = {}
     try {
       body = JSON.parse(raw)
     } catch {
-      return NextResponse.json({ ok: false, error: 'Invalid JSON' }, { status: 400 })
+      return apiError('Invalid JSON', { status: 400, ok: false })
     }
     const trackId = clean(body.trackId, 64)
     if (!trackId) {
-      return NextResponse.json({ ok: false, error: 'trackId required' }, { status: 400 })
+      return apiError('trackId required', { status: 400, ok: false })
     }
     const source = ALLOWED_SOURCES.has(String(body.source)) ? String(body.source) : 'yt'
     const region = clean(body.region, 8).toUpperCase() || 'GLOBAL'
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
         artwork: clean(body.artwork, 300) || null,
       },
     })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, recorded: 1 })
   } catch {
     // reactions are anonymous and best-effort — never surface errors to the user
     return NextResponse.json({ ok: false }, { status: 200 })

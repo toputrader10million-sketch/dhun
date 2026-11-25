@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchPiped, parseStreamItem, cleanTitle, cacheGet, cacheSet } from '@/lib/piped'
+import { apiError } from '@/lib/api'
+import { fetchPiped, parseStreamItem, cleanTitle, cacheGet, cacheSet, cacheGetStale } from '@/lib/piped'
 import { ytRelated, ytMusicSearch } from '@/lib/ytmusic'
+import { openBreaker, degradedNotice, UPSTREAM_LABELS } from '@/lib/resilient'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -38,7 +40,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const era = (req.nextUrl.searchParams.get('era') ?? '').toLowerCase()
 
   if (!id && !title) {
-    return NextResponse.json({ error: 'Missing id or title' }, { status: 400 })
+    return apiError('Missing id or title', { status: 400 })
   }
 
   const query = artist ? `${artist} songs` : cleanTitle(title || id)
@@ -109,12 +111,27 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         .filter((it) => it.id && it.id !== id)
         .slice(0, 15)
     } catch (err) {
+      // Q1.3 — stale radio beats an error page
+      const stale = cacheGetStale<{ items: MusicItem[] }>(cacheKey)
+      if (stale && stale.items.length > 0) {
+        return NextResponse.json({ ...stale, degraded: degradedNotice(UPSTREAM_LABELS.piped) })
+      }
       const message = err instanceof Error ? err.message : 'Radio search failed'
-      return NextResponse.json({ error: message, items: [] }, { status: 502 })
+      return apiError(message, { status: 502, items: [] })
     }
   }
 
   const out = { items }
+  // Q1.3 — empty radio + open breaker → stale cache with honest banner.
+  if (items.length === 0) {
+    const open = openBreaker(['ytmusic', 'piped'])
+    if (open) {
+      const stale = cacheGetStale<{ items: MusicItem[] }>(cacheKey)
+      const degraded = degradedNotice(UPSTREAM_LABELS[open] ?? open)
+      if (stale && stale.items.length > 0) return NextResponse.json({ ...stale, degraded })
+      return NextResponse.json({ ...out, degraded })
+    }
+  }
   cacheSet(cacheKey, out, TTL)
   return NextResponse.json(out)
 }

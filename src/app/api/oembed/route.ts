@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 
 export const dynamic = 'force-dynamic'
 
@@ -12,7 +13,7 @@ export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
   const yt = searchParams.get('yt') ?? ''
   if (!/^[A-Za-z0-9_-]{6,20}$/.test(yt)) {
-    return NextResponse.json({ error: 'bad-id' }, { status: 400 })
+    return apiError('bad-id', { status: 400, code: 'bad-request' })
   }
   try {
     const url = `https://www.youtube.com/oembed?url=${encodeURIComponent(
@@ -26,6 +27,6 @@ export async function GET(req: Request) {
       { headers: { 'Cache-Control': 'public, max-age=86400' } }
     )
   } catch {
-    return NextResponse.json({ error: 'unavailable' }, { status: 502 })
+    return apiError('unavailable', { status: 502, code: 'upstream-unavailable' })
   }
 }

@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/empty-state'
 import type { HomeResponse, MusicItem } from '@/lib/types'
 import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
+import { reportDegraded } from '@/store/degraded'
 import { useSettings } from '@/store/settings'
 import { greeting } from '@/lib/format'
 import { useT } from '@/lib/i18n'
@@ -64,6 +65,7 @@ export function HomeView({ region }: { region?: string }) {
     fetch(`/api/home?region=${activeRegion}&hour=${hour}${weatherParam ? `&weather=${weatherParam}` : ''}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
       .then((d) => {
+        reportDegraded(d)
         if (alive) setData(d)
       })
       .catch(() => {

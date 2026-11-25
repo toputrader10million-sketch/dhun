@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { trendingTracks } from '@/lib/audius'
 import type { MusicItem } from '@/lib/types'
 
@@ -13,12 +14,9 @@ export async function GET(req: NextRequest) {
     const items: MusicItem[] = await trendingTracks(limit, genre || undefined)
     return NextResponse.json({ items })
   } catch (err) {
-    return NextResponse.json(
-      {
-        error: err instanceof Error ? err.message : 'Audius trending failed',
-        items: [] as MusicItem[],
-      },
-      { status: 502 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Audius trending failed', {
+      status: 502,
+      items: [] as MusicItem[],
+    })
   }
 }

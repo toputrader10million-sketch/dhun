@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { DHUN_USER_COOKIE, getUserCounts, serializeUser } from '@/lib/user'
 
@@ -13,11 +14,11 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as { code?: string }
     const code = (body.code ?? '').trim().toUpperCase()
     if (!code) {
-      return NextResponse.json({ error: 'Missing "code" in body' }, { status: 400 })
+      return apiError('Missing "code" in body', { status: 400 })
     }
     const user = await db.user.findUnique({ where: { code } })
     if (!user) {
-      return NextResponse.json({ error: 'No user with that code' }, { status: 404 })
+      return apiError('No user with that code', { status: 404 })
     }
     const store = await cookies()
     store.set(DHUN_USER_COOKIE, user.id, {
@@ -30,9 +31,8 @@ export async function POST(req: NextRequest) {
     const counts = await getUserCounts(user.id)
     return NextResponse.json({ user: serializeUser(user), counts })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to link user' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to link user', {
+      status: 500,
+    })
   }
 }

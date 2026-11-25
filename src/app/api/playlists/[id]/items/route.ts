@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser } from '@/lib/user'
 
@@ -24,11 +25,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     const artist = body.artist
     const source = body.source ?? 'yt'
     if (!trackId || !title || !artist) {
-      return NextResponse.json({ error: 'id, title and artist are required' }, { status: 400 })
+      return apiError('id, title and artist are required', { status: 400 })
     }
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
     const count = await db.playlistItem.count({ where: { playlistId: id } })
     const item = await db.playlistItem.create({
@@ -44,12 +45,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     })
     await db.playlist.update({ where: { id }, data: { updatedAt: new Date() } })
-    return NextResponse.json({ ok: true, itemId: item.id })
+    return NextResponse.json({ ok: true, itemId: item.id, added: 1, position: count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to add item' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to add item', {
+      status: 500,
+    })
   }
 }
 
@@ -60,19 +60,23 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     const user = await getOrCreateUser()
     const itemId = req.nextUrl.searchParams.get('itemId')
     if (!itemId) {
-      return NextResponse.json({ error: 'Missing "itemId" parameter' }, { status: 400 })
+      return apiError('Missing "itemId" parameter', { status: 400 })
     }
     const playlist = await db.playlist.findFirst({ where: { id, userId: user.id } })
     if (!playlist) {
-      return NextResponse.json({ error: 'Playlist not found' }, { status: 404 })
+      return apiError('Playlist not found', { status: 404 })
     }
-    await db.playlistItem.deleteMany({ where: { id: itemId, playlistId: id } })
+    // Q1.2 — the D58 ghost-favorites lesson: a delete that removed nothing
+    // must never answer 200 as if it succeeded.
+    const removed = await db.playlistItem.deleteMany({ where: { id: itemId, playlistId: id } })
+    if (removed.count === 0) {
+      return apiError('Item not found in playlist', { status: 404, removed: 0 })
+    }
     await db.playlist.update({ where: { id }, data: { updatedAt: new Date() } })
-    return NextResponse.json({ ok: true })
+    return NextResponse.json({ ok: true, removed: removed.count })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to remove item' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to remove item', {
+      status: 500,
+    })
   }
 }

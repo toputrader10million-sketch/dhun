@@ -10,6 +10,7 @@
 // player endpoint is bot-gated, so server-side stream extraction is
 // best-effort only (src/lib/streams.ts).
 import type { MusicItem } from '@/lib/types'
+import { withBreaker } from '@/lib/circuit-breaker'
 
 const WEB_CTX = {
   context: {
@@ -26,21 +27,26 @@ const MUSIC_CTX = {
 const YT_VIDEO_ID_RE = /^[\w-]{11}$/
 
 async function innertube<T>(endpoint: string, body: unknown, timeoutMs = 8000): Promise<T> {
-  const ctrl = new AbortController()
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs)
-  try {
-    const res = await fetch(`https://www.youtube.com/youtubei/v1/${endpoint}?prettyPrint=false`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', origin: 'https://www.youtube.com' },
-      body: JSON.stringify(body),
-      cache: 'no-store',
-      signal: ctrl.signal,
-    })
-    if (!res.ok) throw new Error(`innertube ${endpoint} → HTTP ${res.status}`)
-    return (await res.json()) as T
-  } finally {
-    clearTimeout(timer)
-  }
+  // Q1.3 — the InnerTube WEB/REMIX endpoints sit behind the "ytmusic"
+  // breaker: after 3 consecutive failures requests fail fast so content
+  // routes can serve stale cache instead of burning 8s timeouts.
+  return withBreaker('ytmusic', async () => {
+    const ctrl = new AbortController()
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs)
+    try {
+      const res = await fetch(`https://www.youtube.com/youtubei/v1/${endpoint}?prettyPrint=false`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', origin: 'https://www.youtube.com' },
+        body: JSON.stringify(body),
+        cache: 'no-store',
+        signal: ctrl.signal,
+      })
+      if (!res.ok) throw new Error(`innertube ${endpoint} → HTTP ${res.status}`)
+      return (await res.json()) as T
+    } finally {
+      clearTimeout(timer)
+    }
+  })
 }
 
 // ---------- parse helpers ----------

@@ -4,9 +4,11 @@
  * Day 49: client-side latency graph per instance (this session, persists in
  * localStorage), min/avg/max session stats, preferred-instance badge and
  * auto-refresh. All free-instance failover data.
+ * Q1.4: + System health card fed by the /api/health beacon (db ping,
+ * cache hit-rate, circuit breaker states).
  */
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Activity, BrainCircuit, Globe, Info, Loader2, RadioTower, RefreshCw, Zap } from 'lucide-react'
+import { Activity, BrainCircuit, Database, Globe, HeartPulse, Info, Loader2, RadioTower, RefreshCw, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
@@ -19,6 +21,19 @@ interface AiStatus {
   llm: 'up' | 'down'
   latencyMs: number
   checkedAt: string
+}
+
+/* Q1.4 — /api/health beacon payload (subset the card renders) */
+interface HealthBeacon {
+  ok: boolean
+  uptimeSec: number
+  db: { ok: boolean; latencyMs: number; error: string | null }
+  caches: { entries: number; hits: number; misses: number; staleHits: number; sets: number; hitRate: number }
+  breakers: Array<{ name: string; status: 'closed' | 'open' | 'half-open'; consecutiveFailures: number; lastError: string | null }>
+  degraded: boolean
+  openBreakers: string[]
+  instances: { preferred: string; healthy: number; count: number }
+  ai: AiStatus
 }
 
 const HISTORY_KEY = 'dhun-net-latency'
@@ -138,6 +153,7 @@ export function NetworkView() {
   const [loading, setLoading] = useState(true)
   const [auto, setAuto] = useState(true)
   const [ai, setAi] = useState<AiStatus | null>(null)
+  const [health, setHealth] = useState<HealthBeacon | null>(null)
   const [hist, setHist] = useState<ClientHistory>({})
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
@@ -147,6 +163,15 @@ export function NetworkView() {
       if (res.ok) setAi((await res.json()) as AiStatus)
     } catch {
       setAi(null)
+    }
+  }, [])
+
+  const refreshHealth = useCallback(async () => {
+    try {
+      const res = await fetch('/api/health')
+      if (res.ok) setHealth((await res.json()) as HealthBeacon)
+    } catch {
+      setHealth(null)
     }
   }, [])
 
@@ -173,17 +198,21 @@ export function NetworkView() {
     setHist(loadHistory())
     refresh()
     refreshAi()
-  }, [refresh, refreshAi])
+    refreshHealth()
+  }, [refresh, refreshAi, refreshHealth])
 
   useEffect(() => {
     if (timerRef.current) clearInterval(timerRef.current)
     if (auto) {
-      timerRef.current = setInterval(() => refresh(true), 30_000)
+      timerRef.current = setInterval(() => {
+        refresh(true)
+        refreshHealth()
+      }, 30_000)
     }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current)
     }
-  }, [auto, refresh])
+  }, [auto, refresh, refreshHealth])
 
   const instances = data?.instances
     ? [...data.instances].sort((a, b) => {
@@ -255,6 +284,96 @@ export function NetworkView() {
           </p>
           <p className="mt-1.5 text-[11px] text-muted-foreground">{t('active instance')}</p>
         </div>
+      </div>
+
+      {/* System health — Q1.4 beacon */}
+      <div className="mb-6 rounded-2xl border p-4 sm:p-5">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 className="flex items-center gap-2 text-sm font-semibold">
+            <HeartPulse className="h-4 w-4 text-primary" /> {t('System health')}
+          </h2>
+          {health ? (
+            <span
+              className={cn(
+                'rounded-full px-2.5 py-1 text-[10px] font-semibold',
+                health.ok && !health.degraded
+                  ? 'bg-emerald-500/15 text-emerald-500'
+                  : health.degraded
+                    ? 'bg-amber-500/15 text-amber-500'
+                    : 'bg-destructive/15 text-destructive'
+              )}
+            >
+              {health.ok
+                ? health.degraded
+                  ? t('{0} open', [health.openBreakers.length])
+                  : t('All upstreams healthy')
+                : t('Database unavailable')}
+            </span>
+          ) : (
+            <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" /> {t('probing…')}
+            </span>
+          )}
+        </div>
+
+        {health && (
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="rounded-xl border p-3 text-center">
+              <Database className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
+              <p className={cn('mt-1 text-sm font-bold', health.db.ok ? 'text-emerald-500' : 'text-destructive')}>
+                {health.db.ok ? `${health.db.latencyMs} ms` : t('down')}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{t('Database')}</p>
+            </div>
+            <div className="rounded-xl border p-3 text-center">
+              <Zap className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
+              <p className="mt-1 text-sm font-bold tabular-nums">
+                {Math.round((health.caches.hitRate || 0) * 100)}%
+              </p>
+              <p className="text-[10px] text-muted-foreground">{t('Cache hit-rate')}</p>
+            </div>
+            <div className="rounded-xl border p-3 text-center">
+              <Activity className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
+              <p className="mt-1 text-sm font-bold tabular-nums">{health.caches.entries}</p>
+              <p className="text-[10px] text-muted-foreground">{t('cached entries')}</p>
+            </div>
+            <div className="rounded-xl border p-3 text-center">
+              <RadioTower className="mx-auto h-3.5 w-3.5 text-muted-foreground" />
+              <p className="mt-1 text-sm font-bold tabular-nums">
+                {health.instances.healthy}/{health.instances.count}
+              </p>
+              <p className="text-[10px] text-muted-foreground">{t('instances healthy')}</p>
+            </div>
+          </div>
+        )}
+
+        {health && health.breakers.length > 0 && (
+          <div className="mt-3">
+            <p className="mb-1.5 text-[11px] font-medium text-muted-foreground">{t('Circuit breakers')}</p>
+            <div className="flex flex-wrap gap-1.5">
+              {health.breakers.map((b) => (
+                <span
+                  key={b.name}
+                  title={b.lastError ?? undefined}
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                    b.status === 'closed'
+                      ? 'bg-muted text-muted-foreground'
+                      : b.status === 'half-open'
+                        ? 'bg-amber-500/15 text-amber-500'
+                        : 'bg-destructive/15 text-destructive'
+                  )}
+                >
+                  {b.name} · {b.status === 'closed' ? t('Healthy') : b.status === 'half-open' ? t('Half-open') : t('Open')}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <p className="mt-3 text-xs text-muted-foreground">
+          {t('One honest place for self-hosters: /api/health reports database, cache, breaker and upstream state.')}
+        </p>
       </div>
 
       {/* AI services (Day 24) */}

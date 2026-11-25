@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { fetchPiped, parseStreamItem, cacheGet, cacheSet } from '@/lib/piped'
+import { apiError } from '@/lib/api'
+import { fetchPiped, parseStreamItem, cacheGet, cacheSet, cacheGetStale } from '@/lib/piped'
 import { ytWebSearch, ytMusicSearch, SEARCH_SP } from '@/lib/ytmusic'
+import { openBreaker, degradedNotice, UPSTREAM_LABELS } from '@/lib/resilient'
 import type { SearchResponse, SearchFilter, MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -29,18 +31,22 @@ async function innertubeSearch(q: string, filter: SearchFilter, page?: string): 
 }
 
 export async function GET(req: NextRequest) {
-  try {
-    const q = (req.nextUrl.searchParams.get('q') ?? '').trim()
-    if (q.length < 1) {
-      return NextResponse.json({ error: 'Missing or empty "q" parameter' }, { status: 400 })
-    }
-    const filterParam = req.nextUrl.searchParams.get('filter') ?? 'music_songs'
-    const filter: SearchFilter = VALID_FILTERS.includes(filterParam as SearchFilter)
-      ? (filterParam as SearchFilter)
-      : 'music_songs'
-    const page = req.nextUrl.searchParams.get('page') ?? ''
+  // Hoisted so the catch block can stale-serve for this exact query.
+  const qRaw = (req.nextUrl.searchParams.get('q') ?? '').trim()
+  const filterParam = req.nextUrl.searchParams.get('filter') ?? 'music_songs'
+  const filter: SearchFilter = VALID_FILTERS.includes(filterParam as SearchFilter)
+    ? (filterParam as SearchFilter)
+    : 'music_songs'
+  const pageRaw = req.nextUrl.searchParams.get('page') ?? ''
+  const cacheKey = `search:${qRaw}:${filter}:${pageRaw}`
 
-    const cacheKey = `search:${q}:${filter}:${page}`
+  try {
+    const q = qRaw
+    if (q.length < 1) {
+      return apiError('Missing or empty "q" parameter', { status: 400 })
+    }
+    const page = pageRaw
+
     const cached = cacheGet<SearchResponse>(cacheKey)
     if (cached) return NextResponse.json(cached)
 
@@ -62,10 +68,29 @@ export async function GET(req: NextRequest) {
     }
 
     const out: SearchResponse = { items, nextPage, filter }
+    // Q1.3 — empty result + open breaker → stale cache with honest banner
+    // (never cache an empty search caused by a dead upstream).
+    if (items.length === 0) {
+      const open = openBreaker(['ytmusic', 'piped'])
+      if (open) {
+        const stale = cacheGetStale<SearchResponse>(cacheKey)
+        const degraded = degradedNotice(UPSTREAM_LABELS[open] ?? open)
+        if (stale) return NextResponse.json({ ...stale, degraded })
+        return NextResponse.json({ ...out, degraded })
+      }
+    }
     cacheSet(cacheKey, out, SEARCH_TTL)
     return NextResponse.json(out)
   } catch (err) {
+    // Q1.3 — even on hard failure, stale results beat an error page.
+    const stale = cacheGetStale<SearchResponse>(cacheKey)
+    if (stale) {
+      return NextResponse.json({
+        ...stale,
+        degraded: degradedNotice(UPSTREAM_LABELS.piped),
+      })
+    }
     const message = err instanceof Error ? err.message : 'Search failed'
-    return NextResponse.json({ error: message, items: [], filter: 'music_songs' }, { status: 502 })
+    return apiError(message, { status: 502, items: [], filter: 'music_songs' })
   }
 }

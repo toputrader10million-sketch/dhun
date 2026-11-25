@@ -34,6 +34,7 @@ import { useSettings, applyAccent, eqGainsFor } from '@/store/settings'
 import { ProSheet, useProSheet } from '@/components/premium/pro-sheet'
 import { ProCrown, ProBadge } from '@/components/premium/pro-badge'
 import { useOffline } from '@/store/offline'
+import { useDegraded } from '@/store/degraded'
 import { useSmartDownloads } from '@/lib/smart-downloads'
 import { autoEvictIfNeeded } from '@/lib/storage-manager'
 import { trackSession } from '@/lib/usage-stats'
@@ -79,6 +80,28 @@ function OfflineBanner() {
     <div className="sticky top-0 z-50 flex items-center justify-center gap-2 bg-destructive px-3 py-1.5 text-xs text-white">
       <WifiOff className="h-3.5 w-3.5" /> {t("You're offline — some features are limited.")}
     </div>
+  )
+}
+
+/** Q1.3 — honest amber notice when a route served stale cache because an
+ * upstream circuit breaker is open (auto-clears 90s after the last notice). */
+function DegradedBanner() {
+  const t = useT()
+  const degraded = useDegraded((s) => s.current)
+  const clear = useDegraded((s) => s.clear)
+  if (!degraded) return null
+  return (
+    <button
+      onClick={clear}
+      className="sticky top-0 z-50 flex w-full items-center justify-center gap-2 bg-amber-500/90 px-3 py-1.5 text-left text-xs text-amber-950 transition-[opacity] hover:opacity-90"
+      aria-live="polite"
+      title={t('Tap to dismiss')}
+    >
+      <AudioWaveform className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+      <span>
+        {t('Upstream slow — showing cached data')} · {degraded.upstream}
+      </span>
+    </button>
   )
 }
 
@@ -236,6 +259,7 @@ export function AppShell() {
       <RegisterSW />
       <Toaster position="bottom-center" richColors closeButton />
       <OfflineBanner />
+      <DegradedBanner />
 
       <div className="min-h-screen">
         {/* Desktop sidebar (from lg: tablets keep the roomy full-width layout) */}

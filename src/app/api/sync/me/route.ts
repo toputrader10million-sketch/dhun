@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { db } from '@/lib/db'
 import { getOrCreateUser, getUserCounts, serializeUser } from '@/lib/user'
 
@@ -12,10 +13,9 @@ export async function GET() {
     const counts = await getUserCounts(user.id)
     return NextResponse.json({ user: serializeUser(user), counts })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to resolve user' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to resolve user', {
+      status: 500,
+    })
   }
 }
 
@@ -41,9 +41,8 @@ export async function POST(req: NextRequest) {
     const counts = await getUserCounts(user.id)
     return NextResponse.json({ user: serializeUser(user), counts })
   } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : 'Failed to update user' },
-      { status: 500 }
-    )
+    return apiError(err instanceof Error ? err.message : 'Failed to update user', {
+      status: 500,
+    })
   }
 }

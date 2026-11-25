@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { apiError } from '@/lib/api'
 import { ytMusicSearch, ytWebSearch } from '@/lib/ytmusic'
 import { trendingTracks } from '@/lib/audius'
 import { cacheGet, cacheSet } from '@/lib/piped'
+import { emptyResultFallback } from '@/lib/resilient'
 import type { MusicItem } from '@/lib/types'
 
 export const runtime = 'nodejs'
@@ -108,7 +110,7 @@ export async function GET(req: NextRequest) {
   if (mode === 'genre') {
     const g = GENRE_CHARTS.find((x) => x.id === genreId)
     if (!g) {
-      return NextResponse.json({ error: 'Unknown genre' }, { status: 400 })
+      return apiError('Unknown genre', { status: 400 })
     }
     /* Day 35 — blend region flavor into the genre query when a specific
      * region is chosen (e.g. BD + Pop → "bangla pop top songs"). */
@@ -157,6 +159,14 @@ export async function GET(req: NextRequest) {
   }
 
   const out = { sections: sections.filter((s) => s.items.length > 0) }
-  cacheSet(cacheKey, out, TTL)
-  return NextResponse.json(out)
+  // Q1.3 — empty charts + open breaker → stale cache with honest banner.
+  const fallback = emptyResultFallback({
+    cacheKey,
+    out,
+    isEmpty: (v) => v.sections.length === 0,
+    candidates: ['ytmusic', 'piped', 'audius'],
+  })
+  if (fallback.cacheable) cacheSet(cacheKey, fallback.data, TTL)
+  const body = fallback.degraded ? { ...fallback.data, degraded: fallback.degraded } : fallback.data
+  return NextResponse.json(body)
 }
