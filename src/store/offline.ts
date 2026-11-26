@@ -13,6 +13,7 @@ import {
 } from '@/lib/offline'
 import { clientResolveAudio } from '@/lib/client-resolve'
 import { findSmartMatches } from '@/lib/smart-match'
+import { effectiveMaxBitrate } from '@/lib/data-saver'
 import { useKeys } from '@/store/keys'
 import type { TrackSource } from '@/lib/types'
 
@@ -79,7 +80,7 @@ export const useOffline = create<OfflineStore>((set, get) => ({
       // Ranked alternatives for the Smart-Match retry chain (dead tracks happen).
       let fallbackMatches: Awaited<ReturnType<typeof findSmartMatches>> = []
       if (src === 'yt') {
-        const resolved = await clientResolveAudio(trackId)
+        const resolved = await clientResolveAudio(trackId, effectiveMaxBitrate())
         if (resolved) {
           urlOverride = `/api/audio/${trackId}?upstream=${encodeURIComponent(resolved.upstreamUrl)}&ct=${encodeURIComponent(resolved.mimeType)}`
         } else {

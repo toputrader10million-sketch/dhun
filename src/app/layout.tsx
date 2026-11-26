@@ -48,6 +48,9 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   viewportFit: "cover",
+  // Q2.6 — Android Chrome: docked keyboards resize the viewport instead of
+  // covering it, so the Copilot composer stays usable while typing.
+  interactiveWidget: "resizes-content",
 };
 
 export default function RootLayout({

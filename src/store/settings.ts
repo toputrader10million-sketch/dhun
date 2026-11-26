@@ -179,6 +179,10 @@ interface SettingsState {
   language: AppLanguage
   /** Day 48: auto-evict least-played offline tracks when storage runs low */
   storageAutoEvict: boolean
+  /** Q2.9: Data saver — cap streams at 128 kbps + smaller feed artwork */
+  dataSaver: boolean
+  /** Q2.9: also activate data saver automatically while the OS/browser Data Saver is on */
+  dataSaverFollowOs: boolean
   setPremium: (v: boolean) => void
   /** Day 53: activate Pro with the unlock method recorded */
   activatePro: (via: ProVia) => void
@@ -210,6 +214,8 @@ interface SettingsState {
   setDesktopWidget: (v: boolean) => void
   setLanguage: (l: AppLanguage) => void
   setStorageAutoEvict: (v: boolean) => void
+  setDataSaver: (v: boolean) => void
+  setDataSaverFollowOs: (v: boolean) => void
 }
 
 export const useSettings = create<SettingsState>()(
@@ -247,6 +253,8 @@ export const useSettings = create<SettingsState>()(
       desktopWidget: false,
       language: 'en',
       storageAutoEvict: false,
+      dataSaver: false,
+      dataSaverFollowOs: true,
       // Activating premium switches to the gold theme; deactivating reverts gold → rose.
       setPremium: (premium) =>
         set((s) => ({
@@ -321,6 +329,8 @@ export const useSettings = create<SettingsState>()(
       setDesktopWidget: (desktopWidget) => set({ desktopWidget }),
       setLanguage: (language) => set({ language }),
       setStorageAutoEvict: (storageAutoEvict) => set({ storageAutoEvict }),
+      setDataSaver: (dataSaver) => set({ dataSaver }),
+      setDataSaverFollowOs: (dataSaverFollowOs) => set({ dataSaverFollowOs }),
     }),
     {
       name: 'dhun-settings',

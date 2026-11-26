@@ -630,4 +630,21 @@ export const BN: Record<string, string> = {
   'Health beacon': 'হেলথ বিকন',
   'One honest place for self-hosters: /api/health reports database, cache, breaker and upstream state.':
     'সেলফ-হোস্টারদের জন্য এক সৎ জায়গা: /api/health ডেটাবেস, ক্যাশ, ব্রেকার ও আপস্ট্রিম অবস্থা জানায়।',
+
+  // Q2 — Real-device loop (Phase Q2)
+  'Data saver': 'ডেটা সেভার',
+  'Caps streams and downloads at 128 kbps and loads smaller feed artwork.':
+    'স্ট্রিম ও ডাউনলোড ১২৮ kbps-এ সীমিত হয়, ফিডে ছোট থাম্বনেল লোড হয়।',
+  'Data saver on': 'ডেটা সেভার চালু',
+  'Streams and downloads are capped at 128 kbps.': 'স্ট্রিম ও ডাউনলোড এখন ১২৮ kbps-এ সীমিত।',
+  'Follow device Data Saver': 'ডিভাইসের ডেটা সেভার মেনে চলুন',
+  'Activates automatically while your phone or browser asks apps to save data.':
+    'ফোন বা ব্রাউজার ডেটা বাঁচাতে বললে স্বয়ংক্রিয়ভাবে চালু হয়।',
+  'Device Data Saver detected': 'ডিভাইসের ডেটা সেভার ধরা পড়েছে',
+  'This browser does not report network type — follow-device stays idle':
+    'এই ব্রাউজার নেটওয়ার্ক ধরন জানায় না — ফলো-ডিভাইস অপেক্ষমাণ থাকবে',
+  'Stream cap: {0} kbps': 'স্ট্রিম সীমা: {0} kbps',
+  'Stream cap: none': 'স্ট্রিম সীমা: নেই',
+  'The cap applies to YouTube Hi-Fi streams and offline downloads. Audius and Jamendo proxies have no bitrate selector — lighter artwork applies everywhere.':
+    'সীমাটি YouTube Hi-Fi স্ট্রিম ও অফলাইন ডাউনলোডে কাজ করে। Audius ও Jamendo প্রক্সিতে বিটরেট নির্বাচক নেই — হালকা আর্টওয়ার্ক সবখানে কাজ করে।',
 }

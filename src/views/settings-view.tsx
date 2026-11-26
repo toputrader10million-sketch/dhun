@@ -67,6 +67,7 @@ import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
 import { useUi } from '@/store/ui'
 import { useSmartDownloads, getNetworkSnapshot, subscribeNetwork, getNetworkServerSnapshot } from '@/lib/smart-downloads'
+import { useDataSaver } from '@/lib/data-saver'
 import { triggerInstall } from '@/components/pwa/register-sw'
 import { useCast } from '@/lib/cast'
 import { HandoffDialog } from '@/components/player/handoff-dialog'
@@ -320,6 +321,79 @@ function SmartDownloadsCard() {
 }
 
 const EQ_PRESET_LIST: Exclude<EqPreset, 'custom'>[] = ['flat', 'bass', 'treble', 'vocal', 'electronic', 'acoustic']
+
+/**
+ * Q2.9 — Data saver card: one honest switch that reduces data use across
+ * streams, downloads and artwork, plus follow-device auto mode.
+ */
+function DataSaverCard() {
+  const t = useT()
+  const s = useSettings()
+  const saverActive = useDataSaver()
+  const net = useSyncExternalStore(subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot)
+
+  const netNote = net.saveData
+    ? t('Device Data Saver detected')
+    : net.detail
+      ? `${t('network type unknown')} (${net.detail})`
+      : t('This browser does not report network type — follow-device stays idle')
+
+  return (
+    <div className="space-y-3 rounded-xl border bg-accent/20 p-3" data-testid="data-saver-card">
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Label htmlFor="data-saver" className="text-xs">
+            {t('Data saver')}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t('Caps streams and downloads at 128 kbps and loads smaller feed artwork.')}
+          </p>
+        </div>
+        <Switch
+          id="data-saver"
+          checked={s.dataSaver}
+          onCheckedChange={(v) => {
+            s.setDataSaver(v)
+            if (v) toast(t('Data saver on'), { description: t('Streams and downloads are capped at 128 kbps.') })
+          }}
+        />
+      </div>
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0">
+          <Label htmlFor="data-saver-os" className="text-xs">
+            {t('Follow device Data Saver')}
+          </Label>
+          <p className="text-xs text-muted-foreground">
+            {t('Activates automatically while your phone or browser asks apps to save data.')}
+          </p>
+        </div>
+        <Switch id="data-saver-os" checked={s.dataSaverFollowOs} onCheckedChange={(v) => s.setDataSaverFollowOs(v)} />
+      </div>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground" aria-live="polite">
+        <span
+          className={cn(
+            'rounded-full px-2 py-0.5 font-medium',
+            saverActive ? 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400' : 'bg-muted text-muted-foreground'
+          )}
+        >
+          {saverActive ? t('Active') : t('Off')}
+        </span>
+        <span>{netNote}</span>
+        <span aria-hidden>•</span>
+        <span>
+          {saverActive
+            ? t('Stream cap: {0} kbps', ['128'])
+            : s.maxBitrate > 0
+              ? t('Stream cap: {0} kbps', [String(s.maxBitrate)])
+              : t('Stream cap: none')}
+        </span>
+      </div>
+      <p className="text-[11px] leading-relaxed text-muted-foreground">
+        {t('The cap applies to YouTube Hi-Fi streams and offline downloads. Audius and Jamendo proxies have no bitrate selector — lighter artwork applies everywhere.')}
+      </p>
+    </div>
+  )
+}
 const EQ_PRESET_LABELS: Record<Exclude<EqPreset, 'custom'>, string> = {
   flat: 'Flat',
   bass: 'Bass boost',
@@ -1010,6 +1084,8 @@ export function SettingsView() {
             </div>
             <Switch id="mini-art" checked={s.showMiniArt} onCheckedChange={s.setShowMiniArt} />
           </div>
+          {/* Q2.9 — Data saver */}
+          <DataSaverCard />
         </div>
       </section>
 

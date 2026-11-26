@@ -21,76 +21,12 @@ import { persist } from 'zustand/middleware'
 import { useSettings } from '@/store/settings'
 import { useOffline } from '@/store/offline'
 import { useLibrary } from '@/store/library'
+import { readNetwork, subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot } from '@/lib/network'
 
-export interface NetworkKind {
-  online: boolean
-  saveData: boolean
-  /** 'wifi-like' = unmetered per Network Info API; 'metered' = cellular/slow; 'unknown' = API missing */
-  kind: 'wifi-like' | 'metered' | 'unknown'
-  /** Raw connection info for the settings UI ("4g", "wifi"…) */
-  detail: string
-}
-
-export function readNetwork(): NetworkKind {
-  if (typeof navigator === 'undefined') {
-    return { online: true, saveData: false, kind: 'unknown', detail: '' }
-  }
-  const conn = (navigator as Navigator & {
-    connection?: { type?: string; effectiveType?: string; saveData?: boolean }
-  }).connection
-  const online = navigator.onLine
-  const saveData = Boolean(conn?.saveData)
-  const type = (conn?.type ?? '').toLowerCase()
-  const eff = (conn?.effectiveType ?? '').toLowerCase()
-  const detail = type || eff
-  if (!online) return { online: false, saveData, kind: 'metered', detail: 'offline' }
-  if (type === 'wifi' || type === 'ethernet') return { online, saveData, kind: 'wifi-like', detail: type }
-  if (['slow-2g', '2g', '3g'].includes(eff)) return { online, saveData, kind: 'metered', detail: eff || 'cellular' }
-  if (type === 'cellular') return { online, saveData, kind: 'metered', detail: eff || 'cellular' }
-  return { online, saveData, kind: 'unknown', detail }
-}
-
-/* --- React-friendly external store for the network snapshot (no setState-in-effect) --- */
-const SERVER_NET_SNAPSHOT: NetworkKind = { online: true, saveData: false, kind: 'unknown', detail: '' }
-let netSnapshot: NetworkKind | null = null
-const netListeners = new Set<() => void>()
-
-function refreshNetSnapshot() {
-  const next = readNetwork()
-  const prev = netSnapshot
-  netSnapshot = next
-  if (
-    prev &&
-    (prev.online !== next.online ||
-      prev.saveData !== next.saveData ||
-      prev.kind !== next.kind ||
-      prev.detail !== next.detail)
-  ) {
-    netListeners.forEach((l) => l())
-  }
-}
-
-/** useSyncExternalStore-compatible subscribe (binds listeners once). */
-export function subscribeNetwork(onChange: () => void): () => void {
-  netListeners.add(onChange)
-  if (netListeners.size === 1 && typeof window !== 'undefined') {
-    refreshNetSnapshot()
-    window.addEventListener('online', refreshNetSnapshot)
-    window.addEventListener('offline', refreshNetSnapshot)
-  }
-  return () => {
-    netListeners.delete(onChange)
-  }
-}
-
-/** useSyncExternalStore-compatible snapshot (stable reference until a change). */
-export function getNetworkSnapshot(): NetworkKind {
-  if (typeof window === 'undefined') return SERVER_NET_SNAPSHOT
-  if (!netSnapshot) refreshNetSnapshot()
-  return netSnapshot!
-}
-
-export const getNetworkServerSnapshot = (): NetworkKind => SERVER_NET_SNAPSHOT
+// Q2: network detection moved to src/lib/network.ts (single source of truth).
+// Re-exported so existing Settings/UI imports keep working.
+export { readNetwork, subscribeNetwork, getNetworkSnapshot, getNetworkServerSnapshot }
+export type { NetworkKind } from '@/lib/network'
 
 export type SweepSkipReason =
   | 'disabled'

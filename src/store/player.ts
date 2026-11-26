@@ -10,11 +10,14 @@ import {
   setMediaActionHandlers,
   updateMediaPositionState,
   setMediaPlaybackState,
+  clearMediaSession,
 } from '@/engine/media-session'
 import { useSettings, eqGainsFor } from './settings'
 import { useOffline } from './offline'
 import { useKeys } from './keys'
 import { audioUrlFor, touchOfflinePlayed } from '@/lib/offline'
+import { isDataSaverActive, effectiveMaxBitrate } from '@/lib/data-saver'
+import { isIOSDevice } from '@/lib/network'
 import { useCast } from '@/lib/cast'
 import { useSleepTimer } from '@/lib/sleep-timer'
 import { trackPlay } from '@/lib/usage-stats'
@@ -129,6 +132,8 @@ function shuffleIndices(len: number, first: number): number[] {
 
 let initialized = false
 let consecutiveErrors = 0
+/** Q2.7 — show the honest iOS embed-background notice once per session. */
+let iosEmbedNoticeShown = false
 /** Volume to restore when unmuting (not part of persisted state). */
 let preMuteVolume = 80
 // Auto-mix (Day 18): single-flight guard + throttle.
@@ -144,11 +149,17 @@ export const usePlayer = create<PlayerState>()(
         // Day 55 — lifetime play counter (usage dashboard + loyalty unlock)
         trackPlay()
         // Fire-and-forget: hi-res artwork upgrade + history record (safe offline)
-        if (item.source !== 'au') {
+        // Q2.9 — data saver skips the hi-res lookup (and its bytes) entirely.
+        if (!isDataSaverActive() && item.source !== 'au') {
           fetch(`/api/artwork?title=${encodeURIComponent(item.title)}&artist=${encodeURIComponent(item.artist)}`)
             .then((r) => (r.ok ? r.json() : null))
             .then((d) => {
-              if (d?.url && current()?.id === item.id) set({ hiResArt: d.url })
+              if (d?.url && current()?.id === item.id) {
+                set({ hiResArt: d.url })
+                // Q2.7 — the lockscreen got the low-res art at play(); refresh
+                // it with the HD artwork once it resolves.
+                updateMediaMetadata(item, d.url)
+              }
             })
             .catch(() => {})
         }
@@ -345,7 +356,7 @@ export const usePlayer = create<PlayerState>()(
         //    A watchdog keeps a stalled stream from hanging "Buffering…" forever.
         let hifiOk = false
         if (mode === 'hifi') {
-          const best = await resolveBestStream(item.id, useSettings.getState().maxBitrate)
+          const best = await resolveBestStream(item.id, effectiveMaxBitrate())
           if (best?.url) {
             set({ hifiActive: true })
             hifiOk = await hifiEngine.playUrl(best.url, startSeconds, { watchdogMs: 8000 })
@@ -369,6 +380,16 @@ export const usePlayer = create<PlayerState>()(
           await youtubeEngine.play(item.id, startSeconds)
           const vol = useSettings.getState().volume
           youtubeEngine.setVolume(vol)
+          // Q2.7 — honest iOS notice (once per session): Safari suspends iframes
+          // in the background, so YouTube tracks pause when the app is hidden.
+          if (isIOSDevice() && !iosEmbedNoticeShown) {
+            iosEmbedNoticeShown = true
+            toast('About background audio on iPhone/iPad', {
+              description:
+                'Safari pauses YouTube players when Dhun goes to the background. Audius and Jamendo tracks keep playing — download YouTube favorites for offline listening.',
+              duration: 7000,
+            })
+          }
         } else {
           set({ embedMode: false })
         }
@@ -524,6 +545,7 @@ export const usePlayer = create<PlayerState>()(
             onPrev: () => get().prev(),
             onNext: () => get().next(),
             onSeekTo: (sec) => get().seek(sec),
+            onSeekBy: (delta) => get().seekBy(delta),
             onStop: () => get().togglePlay(),
           })
           // Cast session lifecycle: when the receiver disconnects, stop local UI state
@@ -617,6 +639,8 @@ export const usePlayer = create<PlayerState>()(
           if (useCast.getState().connected) useCast.getState().actions.stopCast()
           youtubeEngine.stop()
           hifiEngine.stop()
+          // Q2.8 — nothing left to control: clear lockscreen handlers/metadata
+          clearMediaSession()
           set({
             queue: [],
             index: -1,

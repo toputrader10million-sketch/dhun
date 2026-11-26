@@ -13,6 +13,8 @@
  * otherwise early OFFLINE_PROGRESS messages would be lost (race).
  */
 
+import { effectiveMaxBitrate } from '@/lib/data-saver'
+
 export interface OfflineTrack {
   trackId: string
   source: 'yt' | 'au' | 'jm'
@@ -46,11 +48,11 @@ const DOWNLOAD_TIMEOUT_MS = 8 * 60 * 1000 // 8 minutes
 const DELETE_TIMEOUT_MS = 3000 // fallback resolve for OFFLINE_DELETE ack
 const SW_READY_TIMEOUT_MS = 5000 // don't hang forever when no SW exists
 
-/** Resolve the same-origin audio URL for a track. */
-export function audioUrlFor(id: string, source?: string, jamendoKey?: string): string {
+/** Resolve the same-origin audio URL for a track (maxBitrate caps /api/audio, Q2.9). */
+export function audioUrlFor(id: string, source?: string, jamendoKey?: string, maxBitrate?: number): string {
   if (source === 'au') return `/api/audius/stream/${id}`
   if (source === 'jm') return `/api/jamendo/stream/${id}${jamendoKey ? `?key=${encodeURIComponent(jamendoKey)}` : ''}`
-  return `/api/audio/${id}`
+  return `/api/audio/${id}${maxBitrate && maxBitrate > 0 ? `?maxBitrate=${maxBitrate}` : ''}`
 }
 
 /* ------------------------- IndexedDB helpers ------------------------- */
@@ -211,7 +213,10 @@ export async function addOffline(
     if (!worker) return { ok: false, error: 'no-sw' }
 
     const trackId = item.id
-    const url = urlOverride?.startsWith('/') ? urlOverride : audioUrlFor(trackId, source)
+    // Q2.9 — downloads honor the data-saver / maxBitrate cap (yt tracks only:
+    // Audius/Jamendo proxies have no bitrate selector, so the URL is honest).
+    const cap = source === 'yt' ? effectiveMaxBitrate() : 0
+    const url = urlOverride?.startsWith('/') ? urlOverride : audioUrlFor(trackId, source, undefined, cap)
 
     // 1) Register the listener FIRST (progress/done/error race), 2) THEN post.
     const settled = new Promise<{ kind: 'done'; size: number } | { kind: 'error'; error: string }>(

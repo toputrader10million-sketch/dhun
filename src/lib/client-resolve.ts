@@ -51,7 +51,7 @@ function isM4a(mimeType: string): boolean {
   return /mp4a|m4a|audio\/mp4/i.test(mimeType)
 }
 
-async function tryInstance(base: string, id: string): Promise<ClientResolved> {
+async function tryInstance(base: string, id: string, maxBitrate = 0): Promise<ClientResolved> {
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), RACE_TIMEOUT_MS)
   try {
@@ -67,10 +67,14 @@ async function tryInstance(base: string, id: string): Promise<ClientResolved> {
       (s) => typeof s.url === 'string' && s.url.startsWith('https://') && typeof s.bitrate === 'number' && s.bitrate > 0
     )
     if (usable.length === 0) throw new Error(`${base} → no audio streams`)
-    // Prefer AAC ≥128k (plays everywhere incl. Safari offline), else highest bitrate.
+    // Q2.9 — honor the data-saver cap; fall back to the uncapped pool only
+    // when nothing fits (an unavailable stream is worse than an over-budget one).
     const sorted = [...usable].sort((a, b) => (b.bitrate ?? 0) - (a.bitrate ?? 0))
-    const bestM4a = sorted.find((s) => isM4a(s.mimeType ?? '') && (s.bitrate ?? 0) >= 120_000)
-    const best = bestM4a ?? sorted.find((s) => isM4a(s.mimeType ?? '')) ?? sorted[0]
+    const capped = maxBitrate > 0 ? sorted.filter((s) => (s.bitrate ?? 0) <= maxBitrate * 1000) : sorted
+    const pool = capped.length > 0 ? capped : sorted
+    // Prefer AAC ≥120k (plays everywhere incl. Safari offline), else highest bitrate.
+    const bestM4a = pool.find((s) => isM4a(s.mimeType ?? '') && (s.bitrate ?? 0) >= 120_000)
+    const best = bestM4a ?? pool.find((s) => isM4a(s.mimeType ?? '')) ?? pool[0]
     return {
       upstreamUrl: best.url as string,
       bitrate: best.bitrate as number,
@@ -86,10 +90,10 @@ async function tryInstance(base: string, id: string): Promise<ClientResolved> {
  * Race every known Piped instance from the user's device.
  * Resolves with the best stream or null (never throws).
  */
-export async function clientResolveAudio(id: string): Promise<ClientResolved | null> {
+export async function clientResolveAudio(id: string, maxBitrate = 0): Promise<ClientResolved | null> {
   if (typeof window === 'undefined') return null
   try {
-    const results = await Promise.allSettled(CLIENT_INSTANCES.map((base) => tryInstance(base, id)))
+    const results = await Promise.allSettled(CLIENT_INSTANCES.map((base) => tryInstance(base, id, maxBitrate)))
     const wins = results
       .filter((r): r is PromiseFulfilledResult<ClientResolved> => r.status === 'fulfilled')
       .map((r) => r.value)

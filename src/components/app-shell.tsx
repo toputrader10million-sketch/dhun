@@ -41,6 +41,7 @@ import { trackSession } from '@/lib/usage-stats'
 import { hifiEngine } from '@/engine/hifi'
 import { useCast } from '@/lib/cast'
 import { useT } from '@/lib/i18n'
+import { useDataSaverOsAnnounce } from '@/lib/data-saver'
 import { cn } from '@/lib/utils'
 
 const NAV: { id: ViewId; label: string; icon: typeof Home }[] = [
@@ -122,6 +123,8 @@ function ShortcutsButton() {
 
 export function AppShell() {
   const t = useT()
+  // Q2.9 — one-time toast when the OS Data Saver turns the mode on by itself
+  useDataSaverOsAnnounce()
   const view = useUi((s) => s.view)
   const setView = useUi((s) => s.setView)
   const goSearch = useUi((s) => s.goSearch)
@@ -357,10 +360,12 @@ export function AppShell() {
 
         {/* Main column */}
         <div className="lg:pl-60 flex min-h-screen flex-col">
-          {/* Mobile/tablet header — glass deepens + elevates once scrolled */}
+          {/* Mobile/tablet header — glass deepens + elevates once scrolled.
+              pt honors the notch in standalone mode (viewportFit=cover +
+              black-translucent status bar draw the page under the notch). */}
           <header
             className={cn(
-              'sticky top-0 z-40 flex items-center justify-between border-b bg-background/80 backdrop-blur px-4 py-3 transition-[background-color,box-shadow] duration-300 lg:hidden',
+              'sticky top-0 z-40 flex items-center justify-between border-b bg-background/80 backdrop-blur px-4 pb-3 pt-[max(0.75rem,env(safe-area-inset-top))] transition-[background-color,box-shadow] duration-300 lg:hidden',
               scrolled && 'bg-background/95 shadow-lg shadow-black/10'
             )}
           >

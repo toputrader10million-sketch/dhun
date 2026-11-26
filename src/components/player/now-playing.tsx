@@ -38,6 +38,7 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog'
 import { TrackImage } from '@/components/track-row'
+import { useDataSaver, lowTierArt } from '@/lib/data-saver'
 import { LyricsPanel } from './lyrics-panel'
 import { useT } from '@/lib/i18n'
 import { HandoffDialog } from './handoff-dialog'
@@ -386,6 +387,7 @@ export function NowPlaying() {
   // D58 fix — subscribe to the favorites ARRAY (a stable function selector
   // never triggers re-renders, so the heart went stale while paused).
   const favorites = useLibrary((s) => s.favorites)
+  const saver = useDataSaver()
   const region = useSettings((s) => s.region)
   const castAvailable = useCast((s) => s.available)
   const castConnected = useCast((s) => s.connected)
@@ -444,7 +446,7 @@ export function NowPlaying() {
         <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
           {artSrc && (
             <img
-              src={artSrc}
+              src={saver ? lowTierArt(artSrc) || artSrc : artSrc}
               alt=""
               className="h-full w-full scale-125 object-cover blur-3xl opacity-20"
             />

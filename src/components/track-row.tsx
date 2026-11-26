@@ -18,6 +18,7 @@ import { usePlayer } from '@/store/player'
 import { useLibrary } from '@/store/library'
 import { useOffline } from '@/store/offline'
 import { useUi } from '@/store/ui'
+import { useDataSaver } from '@/lib/data-saver'
 import { shareTrack } from '@/lib/share'
 import { toast } from 'sonner'
 import { cn } from '@/lib/utils'
@@ -28,6 +29,8 @@ const YT_VIDEO_ID_RE = /^[\w-]{11}$/
  * Artwork with a self-healing fallback chain:
  *   stored URL → i.ytimg.com hqdefault → i.ytimg.com mqdefault → placeholder.
  * Covers items persisted before artwork normalization (dead proxy URLs).
+ * Q2.9 — when Data saver is active, feeds load the mq tier (≈3× fewer bytes):
+ * stored hqdefault URLs downgrade and hqdefault drops out of the chain.
  */
 export function TrackImage({
   item,
@@ -38,6 +41,7 @@ export function TrackImage({
   className?: string
   rounded?: string
 }) {
+  const saver = useDataSaver()
   const [stage, setStage] = useState(() => (item.artwork ? 0 : 1))
   const [prevKey, setPrevKey] = useState(`${item.id ?? ''}|${item.artwork}`)
   const nextKey = `${item.id ?? ''}|${item.artwork}`
@@ -47,10 +51,11 @@ export function TrackImage({
   }
 
   const ytLike = !!item.id && YT_VIDEO_ID_RE.test(item.id)
+  const storedArt = saver && item.artwork ? item.artwork.replace('hqdefault', 'mqdefault') : item.artwork
   const candidates: string[] = []
-  if (item.artwork) candidates.push(item.artwork)
+  if (storedArt) candidates.push(storedArt)
   if (ytLike && item.id) {
-    candidates.push(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`)
+    if (!saver) candidates.push(`https://i.ytimg.com/vi/${item.id}/hqdefault.jpg`)
     candidates.push(`https://i.ytimg.com/vi/${item.id}/mqdefault.jpg`)
   }
   const src = stage < candidates.length ? candidates[stage] : null
